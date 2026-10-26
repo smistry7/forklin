@@ -466,16 +466,7 @@ function renderSidebar() {
           contextmenu: (e) => { e.preventDefault(); refMenu(t, { name: b.name, kind: 'local', current: b.current }); },
         },
       }, b.name, b.track ? h('span', { class: 'track' }, b.track.replace(/[\[\]]/g, '').replace('ahead ', '↑').replace('behind ', '↓').replace(', ', ' ')) : null))),
-    section('Remotes', remote.map((b) =>
-      h('div', {
-        class: 'item',
-        title: b.name,
-        on: {
-          click: () => jump(b.hash),
-          dblclick: () => checkoutRemote(t, b.name),
-          contextmenu: (e) => { e.preventDefault(); refMenu(t, { name: b.name, kind: 'remote' }); },
-        },
-      }, b.name))),
+    remotesSection(t, jump),
     section('Tags', tags.map((tg) =>
       h('div', {
         class: 'item',
@@ -492,6 +483,36 @@ function renderSidebar() {
         on: { contextmenu: (e) => { e.preventDefault(); stashMenu(t, st); } },
       }, st.subject)))
   ].filter(Boolean));
+}
+
+// Always rendered (even with no remotes) so there is somewhere to add one. Branches are grouped under their remote.
+function remotesSection(t, jump) {
+  const { remotes } = t.summary;
+  const groups = new Map(remotes.map((r) => [r.name, { remote: r, branches: [] }]));
+  for (const b of t.summary.branches.remote) {
+    const owner = [...groups.keys()].filter((n) => b.name.startsWith(`${n}/`)).sort((a, c) => c.length - a.length)[0];
+    if (owner) groups.get(owner).branches.push(b);
+  }
+  return h('div', { class: 'sec' },
+    h('h4', {}, 'Remotes',
+      h('button', { class: 'add', title: 'Add remote…', on: { click: () => addRemote(t) } }, '+')),
+    [...groups.values()].map(({ remote, branches }) => [
+      h('div', {
+        class: 'item remote',
+        title: remote.url,
+        on: { contextmenu: (e) => { e.preventDefault(); remoteMenu(t, remote); } },
+      }, remote.name, h('span', { class: 'track' }, remote.url)),
+      branches.map((b) =>
+        h('div', {
+          class: 'item nested',
+          title: b.name,
+          on: {
+            click: () => jump(b.hash),
+            dblclick: () => checkoutRemote(t, b.name),
+            contextmenu: (e) => { e.preventDefault(); refMenu(t, { name: b.name, kind: 'remote' }); },
+          },
+        }, b.name.slice(remote.name.length + 1))),
+    ]));
 }
 
 function checkoutRemote(t, name) {
@@ -937,6 +958,50 @@ async function refMenu(t, ref) {
   if (id === 'del') {
     const ok = await api.confirm({ message: `Delete branch ${ref.name}?`, detail: 'Unmerged commits on this branch may become unreachable.', confirmLabel: 'Delete', danger: true });
     if (ok) op(t, 'Deleting…', () => api.git('deleteBranch', t.path, ref.name, true));
+  }
+}
+
+async function addRemote(t) {
+  const res = await modal({
+    title: 'Add remote',
+    fields: [{ name: 'name', label: 'Name', type: 'text', value: t.summary.remotes.length ? '' : 'origin' }, { name: 'url', label: 'URL or path', type: 'text' }],
+    okLabel: 'Add',
+  });
+  if (res) op(t, 'Adding remote…', () => api.git('addRemote', t.path, res.name.trim(), res.url.trim()));
+}
+
+async function editRemote(t, remote) {
+  const res = await modal({
+    title: `Edit remote ${remote.name}`,
+    fields: [{ name: 'name', label: 'Name', type: 'text', value: remote.name }, { name: 'url', label: 'URL or path', type: 'text', value: remote.url }],
+    okLabel: 'Save',
+  });
+  if (!res) return;
+  const name = res.name.trim();
+  const url = res.url.trim();
+  if (name === remote.name && url === remote.url) return;
+  // Rename first: it is the step most likely to fail (name taken), and it leaves the URL untouched if it does.
+  op(t, 'Updating remote…', async () => {
+    if (name !== remote.name) await api.git('renameRemote', t.path, remote.name, name);
+    if (url !== remote.url) await api.git('setRemoteUrl', t.path, name, url);
+  });
+}
+
+async function remoteMenu(t, remote) {
+  const id = await api.menu([
+    { id: 'edit', label: 'Edit…' },
+    { separator: true },
+    { id: 'remove', label: `Remove ${remote.name}…` },
+  ]);
+  if (id === 'edit') return editRemote(t, remote);
+  if (id === 'remove') {
+    const ok = await api.confirm({
+      message: `Remove remote ${remote.name}?`,
+      detail: `Its remote-tracking branches are deleted from this repository and local branches stop tracking them. Nothing is deleted on the server (${remote.url}).`,
+      confirmLabel: 'Remove',
+      danger: true,
+    });
+    if (ok) op(t, 'Removing remote…', () => api.git('removeRemote', t.path, remote.name));
   }
 }
 

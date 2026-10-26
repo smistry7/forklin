@@ -55,6 +55,12 @@ textarea { resize: vertical; }
 .item.current { font-weight: 700; color: #7ee787; }
 .item .track { color: var(--muted); font-size: 11px; margin-left: auto; }
 .item.local { padding-left: 12px; }
+.item.remote { padding-left: 12px; font-weight: 600; }
+.item.nested { padding-left: 24px; }
+.item.remote .track { overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
+.sec h4 { display: flex; align-items: center; }
+.sec h4 .add { margin-left: auto; padding: 0 6px; line-height: 16px; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; }
+.sec h4 .add:hover { color: inherit; }
 
 /* graph */
 #graph-head, .row { display: grid; grid-template-columns: var(--graph-w) minmax(0, 1fr) 150px 135px 70px; align-items: center; }

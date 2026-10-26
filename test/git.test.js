@@ -188,3 +188,39 @@ test('deleteRemoteBranch removes the branch on the remote, including slashed nam
   await assert.rejects(git.deleteRemoteBranch(dir, 'nowhere/x'), /No remote/);
   await assert.rejects(git.deleteRemoteBranch(dir, '-origin/x'), /Invalid ref/);
 });
+
+test('remote add / rename / set-url / remove update the repo summary', async () => {
+  const { dir, shas } = await linearRepo(2);
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'forklin-bare-'));
+  await sh(bare, 'init', '-q', '--bare');
+  const bare2 = fs.mkdtempSync(path.join(os.tmpdir(), 'forklin-bare-'));
+  await sh(bare2, 'init', '-q', '--bare');
+
+  await git.addRemote(dir, 'origin', bare);
+  assert.deepStrictEqual((await git.repoSummary(dir)).remotes, [{ name: 'origin', url: bare }]);
+
+  await sh(dir, 'push', '-q', 'origin', 'main');
+  await git.renameRemote(dir, 'origin', 'upstream');
+  assert.deepStrictEqual((await git.repoSummary(dir)).remotes, [{ name: 'upstream', url: bare }]);
+  assert.match(await sh(dir, 'branch', '-r'), /upstream\/main/); // tracking refs follow the rename
+
+  await git.setRemoteUrl(dir, 'upstream', bare2);
+  assert.deepStrictEqual((await git.remotes(dir)), [{ name: 'upstream', url: bare2 }]);
+
+  await git.removeRemote(dir, 'upstream');
+  assert.deepStrictEqual(await git.remotes(dir), []);
+  assert.strictEqual((await sh(dir, 'branch', '-r')).trim(), '');
+  assert.ok(shas.length === 2);
+});
+
+test('remote ops reject bad input and surface git errors', async () => {
+  const { dir } = await linearRepo(1);
+  await git.addRemote(dir, 'origin', '/tmp/does-not-matter');
+  await assert.rejects(git.addRemote(dir, '-x', '/tmp/a'), /Invalid ref/);
+  await assert.rejects(git.addRemote(dir, 'other', '--upload-pack=evil'), /Invalid remote URL/);
+  await assert.rejects(git.addRemote(dir, 'other', '  '), /Invalid remote URL/);
+  await assert.rejects(git.setRemoteUrl(dir, 'origin', '-x'), /Invalid remote URL/);
+  await assert.rejects(git.addRemote(dir, 'origin', '/tmp/b'), /already exists/);
+  await assert.rejects(git.renameRemote(dir, 'nope', 'x'), /No such remote/);
+  await assert.rejects(git.removeRemote(dir, 'nope'), /No such remote/);
+});

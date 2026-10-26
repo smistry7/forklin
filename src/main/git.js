@@ -44,6 +44,13 @@ function assertSha(sha) {
   return sha;
 }
 
+function assertUrl(url) {
+  if (typeof url !== 'string' || !url.trim() || url.startsWith('-') || /[\0\n]/.test(url)) {
+    throw new Error(`Invalid remote URL: ${url}`);
+  }
+  return url.trim();
+}
+
 function assertPaths(paths) {
   if (!Array.isArray(paths) || paths.some((p) => typeof p !== 'string' || p.includes('\0'))) {
     throw new Error('Invalid paths');
@@ -147,6 +154,16 @@ async function branches(cwd) {
   return result;
 }
 
+async function remotes(cwd) {
+  const out = await run(cwd, ['remote', '-v']);
+  const result = new Map();
+  for (const line of out.split('\n')) {
+    const m = /^(\S+)\t(.*) \(fetch\)$/.exec(line);
+    if (m) result.set(m[1], { name: m[1], url: m[2] });
+  }
+  return [...result.values()];
+}
+
 async function stashes(cwd) {
   const out = await run(cwd, ['stash', 'list', `--format=%gd${FS}%s`]);
   return out.split('\n').filter(Boolean).map((l) => {
@@ -173,12 +190,12 @@ async function status(cwd) {
 }
 
 async function repoSummary(cwd) {
-  const [b, s, st, op] = await Promise.all([branches(cwd), stashes(cwd), status(cwd), operationState(cwd)]);
+  const [b, s, st, op, r] = await Promise.all([branches(cwd), stashes(cwd), status(cwd), operationState(cwd), remotes(cwd)]);
   let head = null;
   try {
     head = (await run(cwd, ['rev-parse', 'HEAD'])).trim();
   } catch {}
-  return { branches: b, stashes: s, status: st, operation: op, head };
+  return { branches: b, remotes: r, stashes: s, status: st, operation: op, head };
 }
 
 async function commitFiles(cwd, sha) {
@@ -265,6 +282,11 @@ async function deleteRemoteBranch(cwd, remoteRef) {
   if (!branch) throw new Error(`Invalid remote branch: ${remoteRef}`);
   return run(cwd, ['push', remote, '--delete', assertRef(branch)]);
 }
+const addRemote = async (cwd, name, url) => run(cwd, ['remote', 'add', '--', assertRef(name), assertUrl(url)]);
+// `git remote rename|remove` do no option parsing and reject `--`; assertRef already refuses a leading '-'.
+const renameRemote = async (cwd, name, newName) => run(cwd, ['remote', 'rename', assertRef(name), assertRef(newName)]);
+const setRemoteUrl = async (cwd, name, url) => run(cwd, ['remote', 'set-url', '--', assertRef(name), assertUrl(url)]);
+const removeRemote = async (cwd, name) => run(cwd, ['remote', 'remove', assertRef(name)]);
 const createTag = (cwd, name, sha) => run(cwd, ['tag', assertRef(name), assertSha(sha)]);
 
 // "Rebase to here": replay the current branch's commits on top of `onto`.
@@ -325,9 +347,10 @@ const push = async (cwd) => {
 };
 
 module.exports = {
-  isRepo, gitDir, repoSummary, status, branches, stashes, log, commitDetail, commitFileDiff, workingDiff, operationState,
+  isRepo, gitDir, repoSummary, status, branches, remotes, stashes, log, commitDetail, commitFileDiff, workingDiff, operationState,
   stage, unstage, discard, commit, checkout, checkoutRemote, createBranch, deleteBranch, createTag,
   rebase, rebaseControl, squash, merge, mergeAbort, cherryPick, revert, reset,
   stashPush, stashApply, stashDrop, fetch, pull, push, deleteRemoteBranch,
+  addRemote, renameRemote, setRemoteUrl, removeRemote,
   _run: run,
 };

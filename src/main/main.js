@@ -8,6 +8,7 @@ const GIT_OPS = new Set([
   'stage', 'unstage', 'discard', 'commit', 'checkout', 'checkoutRemote', 'createBranch',
   'deleteBranch', 'deleteRemoteBranch', 'createTag', 'rebase', 'rebaseControl', 'squash', 'merge', 'mergeAbort', 'cherryPick',
   'revert', 'reset', 'stashPush', 'stashApply', 'stashDrop', 'fetch', 'pull', 'push',
+  'addRemote', 'renameRemote', 'setRemoteUrl', 'removeRemote',
 ]);
 
 let win = null;
