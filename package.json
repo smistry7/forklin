@@ -1,0 +1,15 @@
+{
+  "name": "forklin",
+  "version": "0.1.0",
+  "description": "A local-only Git client for Linux with a commit graph, tabs for multiple repos and one-click rebase.",
+  "main": "src/main/main.js",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "start": "electron . --no-sandbox",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0"
+  }
+}

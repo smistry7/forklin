@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Forklin</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="tabbar"><div id="tabs"></div><button id="newtab" title="Open repository (Ctrl+T)">+</button></div>
+  <div id="toolbar"></div>
+  <div id="banner" hidden></div>
+  <div id="main">
+    <aside id="sidebar"></aside>
+    <section id="graph">
+      <div id="graph-head"><span>Graph</span><span>Message</span><span>Author</span><span>Date</span><span>SHA</span></div>
+      <div id="scroll"><div id="rows"></div></div>
+    </section>
+    <section id="details"></section>
+  </div>
+  <div id="empty" hidden>
+    <h1>Forklin</h1>
+    <p>Open a Git repository to get started.</p>
+    <button id="open-btn" class="primary">Open repository…</button>
+    <p class="muted">Ctrl+T or Ctrl+O to open · Ctrl+W to close a tab · Ctrl+Tab to switch</p>
+  </div>
+  <div id="toast" hidden></div>
+  <div id="modal" hidden></div>
+  <script src="graph.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

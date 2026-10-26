@@ -1,0 +1,4 @@
+#!/bin/bash
+# Launch Forklin. Usage: forklin [repo-path ...]   (e.g. `forklin .`)
+APP_DIR="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+exec "$APP_DIR/node_modules/.bin/electron" "$APP_DIR" --no-sandbox "$@"
