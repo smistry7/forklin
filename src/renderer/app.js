@@ -474,6 +474,7 @@ function renderSidebar() {
         on: {
           click: () => jump(tg.hash),
           dblclick: () => op(t, 'Checking out…', () => api.git('checkout', t.path, tg.name)),
+          contextmenu: (e) => { e.preventDefault(); tagMenu(t, tg.name); },
         },
       }, tg.name))),
     section('Stashes', t.summary.stashes.map((st) =>
@@ -883,6 +884,8 @@ async function commitMenu(t, hash) {
   const commit = t.items[t.index.get(hash)].commit;
   const isHead = hash === t.summary.head;
   const branches = commit.refs.filter((r) => r.type === 'branch' && !r.head);
+  const remotes = commit.refs.filter((r) => r.type === 'remote' && !r.name.endsWith('/HEAD'));
+  const tags = commit.refs.filter((r) => r.type === 'tag');
   const label = `"${commit.subject.length > 40 ? commit.subject.slice(0, 40) + '…' : commit.subject}" (${shortSha(hash)})`;
   const id = await api.menu([
     { id: 'rebase', label: `Rebase ${branch} onto here`, enabled: !isHead },
@@ -891,7 +894,9 @@ async function commitMenu(t, hash) {
     ...branches.map((b) => ({ id: `co:${b.name}`, label: `Checkout ${b.name}` })),
     { id: 'co', label: 'Checkout this commit (detached)', enabled: !isHead },
     { id: 'branch', label: 'Create branch here…' },
+    ...remotes.map((b) => ({ id: `rco:${b.name}`, label: `Checkout ${b.name}` })),
     { id: 'tag', label: 'Create tag here…' },
+    ...tags.map((tg) => ({ id: `deltag:${tg.name}`, label: `Delete tag ${tg.name}…` })),
     { separator: true },
     { id: 'pick', label: 'Cherry-pick', enabled: !isHead },
     { id: 'revert', label: 'Revert commit' },
@@ -906,6 +911,8 @@ async function commitMenu(t, hash) {
   if (id === 'rebase') return rebaseOnto(t, hash, label);
   if (id === 'merge') return mergeFrom(t, hash, label);
   if (id.startsWith('co:')) return op(t, 'Checking out…', () => api.git('checkout', t.path, id.slice(3)));
+  if (id.startsWith('rco:')) return checkoutRemote(t, id.slice(4));
+  if (id.startsWith('deltag:')) return deleteTag(t, id.slice(7));
   if (id === 'co') return op(t, 'Checking out…', () => api.git('checkout', t.path, hash));
   if (id === 'branch') {
     const res = await modal({
@@ -929,6 +936,30 @@ async function commitMenu(t, hash) {
     return op(t, 'Resetting…', () => api.git('reset', t.path, hash, mode));
   }
   if (id === 'copy') api.copy(hash);
+}
+
+async function deleteTag(t, name) {
+  let names = [];
+  if (!(await op(t, 'Checking remotes…', async () => { names = await api.git('remotesWithTag', t.path, name); }))) return;
+  const res = await modal({
+    title: `Delete tag ${name}`,
+    fields: names.map((r) => ({ name: r, label: `Also delete from remote "${r}"`, type: 'checkbox', value: true })),
+    okLabel: 'Delete',
+    danger: true,
+  });
+  if (!res) return;
+  const from = names.filter((r) => res[r]);
+  op(t, 'Deleting tag…', () => api.git('deleteTag', t.path, name, from));
+}
+
+async function tagMenu(t, name) {
+  const id = await api.menu([
+    { id: 'co', label: `Checkout ${name} (detached)` },
+    { separator: true },
+    { id: 'del', label: `Delete ${name}…` },
+  ]);
+  if (id === 'co') return op(t, 'Checking out…', () => api.git('checkout', t.path, name));
+  if (id === 'del') return deleteTag(t, name);
 }
 
 async function refMenu(t, ref) {

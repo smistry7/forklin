@@ -224,3 +224,44 @@ test('remote ops reject bad input and surface git errors', async () => {
   await assert.rejects(git.renameRemote(dir, 'nope', 'x'), /No such remote/);
   await assert.rejects(git.removeRemote(dir, 'nope'), /No such remote/);
 });
+
+test('createTag and deleteTag, locally and on a remote', async () => {
+  const dir = await makeRepo();
+  const sha = await commitFile(dir, 'a.txt', '1\n', 'base');
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'forklin-bare-'));
+  await sh(bare, 'init', '-q', '--bare');
+  await sh(dir, 'remote', 'add', 'origin', bare);
+  const remoteTags = async () => (await sh(dir, 'ls-remote', '--tags', 'origin')).trim();
+  const localTags = async () => (await git.branches(dir)).tags.map((t) => t.name);
+
+  await git.createTag(dir, 'v1', sha);
+  await git.createTag(dir, 'v2', sha);
+  await git.createTag(dir, 'v3', sha);
+  await sh(dir, 'push', '-q', 'origin', 'v1', 'v2');
+  assert.deepStrictEqual(await git.remotesWithTag(dir, 'v1'), ['origin']);
+  assert.deepStrictEqual(await git.remotesWithTag(dir, 'v3'), []);
+
+  await git.deleteTag(dir, 'v1', ['origin']);
+  assert.deepStrictEqual(await localTags(), ['v2', 'v3']);
+  assert.ok(!/refs\/tags\/v1$/m.test(await remoteTags()));
+  assert.match(await remoteTags(), /refs\/tags\/v2$/m);
+
+  await git.deleteTag(dir, 'v2'); // local only: remote copy stays
+  assert.match(await remoteTags(), /refs\/tags\/v2$/m);
+
+  await git.deleteTag(dir, 'v3', ['origin']); // never pushed: skipped on the remote
+  assert.deepStrictEqual(await localTags(), []);
+
+  await assert.rejects(async () => git.deleteTag(dir, '--force'), /Invalid ref/);
+  await assert.rejects(async () => git.deleteTag(dir, 'v1', ['nope']), /Unknown remote/);
+});
+
+test('deleteTag keeps the local tag when the remote delete fails', async () => {
+  const dir = await makeRepo();
+  const sha = await commitFile(dir, 'a.txt', '1\n', 'base');
+  await sh(dir, 'remote', 'add', 'origin', path.join(os.tmpdir(), 'forklin-does-not-exist'));
+  await git.createTag(dir, 'v1', sha);
+  assert.deepStrictEqual(await git.remotesWithTag(dir, 'v1'), []); // unreachable remote is left out
+  await assert.rejects(() => git.deleteTag(dir, 'v1', ['origin']));
+  assert.deepStrictEqual((await git.branches(dir)).tags.map((t) => t.name), ['v1']);
+});

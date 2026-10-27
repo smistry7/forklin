@@ -288,6 +288,24 @@ const renameRemote = async (cwd, name, newName) => run(cwd, ['remote', 'rename',
 const setRemoteUrl = async (cwd, name, url) => run(cwd, ['remote', 'set-url', '--', assertRef(name), assertUrl(url)]);
 const removeRemote = async (cwd, name) => run(cwd, ['remote', 'remove', assertRef(name)]);
 const createTag = (cwd, name, sha) => run(cwd, ['tag', assertRef(name), assertSha(sha)]);
+const remoteNames = async (cwd) => (await remotes(cwd)).map((r) => r.name);
+const hasRemoteTag = async (cwd, remote, name) => !!(await run(cwd, ['ls-remote', '--tags', remote, `refs/tags/${assertRef(name)}`])).trim();
+// Asks each remote (network); ones that can't be reached are left out rather than guessed at.
+async function remotesWithTag(cwd, name) {
+  const found = await Promise.all((await remoteNames(cwd)).map((r) => hasRemoteTag(cwd, r, name).then((ok) => ok && r, () => false)));
+  return found.filter(Boolean);
+}
+// Remotes go first so a failed push (auth, offline) leaves the local tag in place to retry.
+// A remote that doesn't have the tag is skipped rather than failing the whole delete.
+async function deleteTag(cwd, name, fromRemotes = []) {
+  assertRef(name);
+  const known = await remoteNames(cwd);
+  for (const r of fromRemotes) if (!known.includes(r)) throw new Error(`Unknown remote: ${r}`);
+  for (const r of fromRemotes) {
+    if (await hasRemoteTag(cwd, r, name)) await run(cwd, ['push', r, '--delete', `refs/tags/${name}`]);
+  }
+  return run(cwd, ['tag', '-d', name]);
+}
 
 // "Rebase to here": replay the current branch's commits on top of `onto`.
 const rebase = (cwd, onto) => run(cwd, ['rebase', '--autostash', assertRef(onto)]);
@@ -348,7 +366,7 @@ const push = async (cwd) => {
 
 module.exports = {
   isRepo, gitDir, repoSummary, status, branches, remotes, stashes, log, commitDetail, commitFileDiff, workingDiff, operationState,
-  stage, unstage, discard, commit, checkout, checkoutRemote, createBranch, deleteBranch, createTag,
+  stage, unstage, discard, commit, checkout, checkoutRemote, createBranch, deleteBranch, createTag, deleteTag, remotesWithTag,
   rebase, rebaseControl, squash, merge, mergeAbort, cherryPick, revert, reset,
   stashPush, stashApply, stashDrop, fetch, pull, push, deleteRemoteBranch,
   addRemote, renameRemote, setRemoteUrl, removeRemote,
