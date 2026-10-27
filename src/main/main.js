@@ -6,7 +6,7 @@ const git = require('./git');
 const GIT_OPS = new Set([
   'repoSummary', 'log', 'commitDetail', 'commitFileDiff', 'workingDiff',
   'stage', 'unstage', 'discard', 'commit', 'checkout', 'checkoutRemote', 'createBranch',
-  'deleteBranch', 'deleteRemoteBranch', 'createTag', 'deleteTag', 'remotesWithTag', 'rebase', 'rebaseControl', 'squash', 'merge', 'mergeAbort', 'cherryPick',
+  'deleteBranch', 'pruneGoneBranches', 'deleteRemoteBranch', 'createTag', 'deleteTag', 'remotesWithTag', 'rebase', 'rebaseControl', 'squash', 'merge', 'mergeAbort', 'cherryPick',
   'revert', 'reset', 'stashPush', 'stashApply', 'stashDrop', 'fetch', 'pull', 'push',
   'addRemote', 'renameRemote', 'setRemoteUrl', 'removeRemote',
 ]);

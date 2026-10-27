@@ -265,3 +265,28 @@ test('deleteTag keeps the local tag when the remote delete fails', async () => {
   await assert.rejects(() => git.deleteTag(dir, 'v1', ['origin']));
   assert.deepStrictEqual((await git.branches(dir)).tags.map((t) => t.name), ['v1']);
 });
+
+test('pruneGoneBranches deletes only requested branches whose upstream is gone', async () => {
+  const dir = await makeRepo();
+  await commitFile(dir, 'a.txt', '1\n', 'base');
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'forklin-bare-'));
+  await sh(bare, 'init', '-q', '--bare');
+  await sh(dir, 'remote', 'add', 'origin', bare);
+  for (const b of ['gone-a', 'gone/b', 'kept', 'current-gone']) await sh(dir, 'branch', b);
+  await sh(dir, 'checkout', '-q', 'gone/b');
+  await commitFile(dir, 'b.txt', 'b\n', 'unmerged work'); // squash-merged upstream: needs a force delete
+  await sh(dir, 'checkout', '-q', 'current-gone');
+  await sh(dir, 'push', '-q', '-u', 'origin', 'main', 'gone-a', 'gone/b', 'kept', 'current-gone');
+  await sh(bare, 'branch', '-D', 'gone-a', 'gone/b', 'current-gone');
+  await sh(dir, 'fetch', '-q', '--prune');
+  const local = async () => (await git.branches(dir)).local.map((b) => b.name).sort();
+
+  // 'kept' still has its upstream; 'current-gone' is checked out; 'missing' doesn't exist.
+  const deleted = await git.pruneGoneBranches(dir, ['gone-a', 'gone/b', 'kept', 'current-gone', 'missing']);
+
+  assert.deepStrictEqual(deleted.sort(), ['gone-a', 'gone/b']);
+  assert.deepStrictEqual(await local(), ['current-gone', 'kept', 'main']);
+  assert.deepStrictEqual(await git.pruneGoneBranches(dir, []), []);
+  await assert.rejects(async () => git.pruneGoneBranches(dir, ['-D']), /Invalid ref/);
+  await assert.rejects(async () => git.pruneGoneBranches(dir, 'gone-a'), /Invalid branch list/);
+});

@@ -272,6 +272,18 @@ const createBranch = (cwd, name, startPoint, checkoutAfter) =>
     ? run(cwd, ['checkout', '-b', assertRef(name), assertRef(startPoint)])
     : run(cwd, ['branch', assertRef(name), assertRef(startPoint)]);
 const deleteBranch = (cwd, name, force) => run(cwd, ['branch', force ? '-D' : '-d', assertRef(name)]);
+// The renderer passes the names it showed the user; each is re-checked so nothing outside that list,
+// or no longer gone (e.g. re-pushed since), is deleted. Force delete: gone branches are often
+// squash-merged, which `-d` reports as unmerged. The checked-out branch can't be deleted and is skipped.
+async function pruneGoneBranches(cwd, names) {
+  if (!Array.isArray(names)) throw new Error('Invalid branch list');
+  names.forEach(assertRef);
+  const { local } = await branches(cwd);
+  const gone = new Set(local.filter((b) => b.upstream && b.track === '[gone]' && !b.current).map((b) => b.name));
+  const doomed = names.filter((n) => gone.has(n));
+  if (doomed.length) await run(cwd, ['branch', '-D', ...doomed]);
+  return doomed;
+}
 // Deletes a branch on the remote (a push), e.g. 'origin/feature/x' -> remote 'origin', branch 'feature/x'.
 async function deleteRemoteBranch(cwd, remoteRef) {
   assertRef(remoteRef);
@@ -366,7 +378,7 @@ const push = async (cwd) => {
 
 module.exports = {
   isRepo, gitDir, repoSummary, status, branches, remotes, stashes, log, commitDetail, commitFileDiff, workingDiff, operationState,
-  stage, unstage, discard, commit, checkout, checkoutRemote, createBranch, deleteBranch, createTag, deleteTag, remotesWithTag,
+  stage, unstage, discard, commit, checkout, checkoutRemote, createBranch, deleteBranch, pruneGoneBranches, createTag, deleteTag, remotesWithTag,
   rebase, rebaseControl, squash, merge, mergeAbort, cherryPick, revert, reset,
   stashPush, stashApply, stashDrop, fetch, pull, push, deleteRemoteBranch,
   addRemote, renameRemote, setRemoteUrl, removeRemote,

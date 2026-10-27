@@ -456,7 +456,7 @@ function renderSidebar() {
   sb.replaceChildren(...[
     h('div', { class: 'sec' },
       h('div', { class: 'item local', on: { click: () => jump(LOCAL) } }, `Local Changes${changes ? ` (${changes})` : ''}`)),
-    section('Branches', local.map((b) =>
+    section(['Branches', pruneButton(t)], local.map((b) =>
       h('div', {
         class: 'item' + (b.current ? ' current' : ''),
         title: b.name,
@@ -514,6 +514,24 @@ function remotesSection(t, jump) {
           },
         }, b.name.slice(remote.name.length + 1))),
     ]));
+}
+
+// Branches whose upstream was deleted on the remote (shown as "gone" after a fetch with --prune).
+function pruneButton(t) {
+  const gone = t.summary.branches.local.filter((b) => b.track === '[gone]' && !b.current);
+  if (!gone.length) return null;
+  return h('button', { class: 'add', title: `Delete ${gone.length} branch${gone.length === 1 ? '' : 'es'} whose remote branch is gone…`, on: { click: () => pruneGone(t, gone) } }, '✂');
+}
+
+async function pruneGone(t, gone) {
+  const names = gone.map((b) => b.name);
+  const ok = await api.confirm({
+    message: `Delete ${names.length} local branch${names.length === 1 ? '' : 'es'} whose remote branch is gone?`,
+    detail: `${names.join('\n')}\n\nThey are force-deleted, so commits not merged elsewhere may become unreachable. The checked-out branch is never deleted.`,
+    confirmLabel: 'Delete',
+    danger: true,
+  });
+  if (ok) op(t, 'Pruning branches…', () => api.git('pruneGoneBranches', t.path, names));
 }
 
 function checkoutRemote(t, name) {
