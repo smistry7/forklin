@@ -1,7 +1,12 @@
 #!/bin/bash
-# Adds Forklin to the Ubuntu app launcher and puts `forklin` on your PATH (~/.local/bin).
+# Installs dependencies, adds Forklin to the Ubuntu app launcher and puts `forklin` on your PATH (~/.local/bin).
 set -euo pipefail
 APP_DIR="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+# The launcher execs node_modules/.bin/electron; without it the icon silently does nothing.
+if [ ! -x "$APP_DIR/node_modules/.bin/electron" ]; then
+  command -v npm >/dev/null || { echo "npm not found. Install a current Node.js (https://nodejs.org or nvm; apt's is often too old), then re-run." >&2; exit 1; }
+  (cd "$APP_DIR" && npm install)
+fi
 mkdir -p "$HOME/.local/share/applications" "$HOME/.local/bin" "$HOME/.local/share/icons"
 cp "$APP_DIR/assets/forklin.svg" "$HOME/.local/share/icons/forklin.svg"
 ln -sf "$APP_DIR/bin/forklin" "$HOME/.local/bin/forklin"

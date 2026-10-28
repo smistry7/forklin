@@ -15,9 +15,12 @@ A local-only Git client for Ubuntu, in the spirit of Fork. It shells out to your
 
 ## Run
 
+    scripts/install-desktop.sh   # npm install + app-grid entry + `forklin` command
+
+Or run from the checkout without installing a launcher:
+
     npm install
     npm start                 # or: bin/forklin /path/to/repo
-    scripts/install-desktop.sh   # app-grid entry + `forklin` command
 
 `--no-sandbox` is passed because the npm-installed Electron has no setuid sandbox helper. Remove it if you set that up.
 
