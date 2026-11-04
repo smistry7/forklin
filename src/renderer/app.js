@@ -327,10 +327,11 @@ function currentBranchLabel(tab) {
 }
 
 // Selected commits must be a consecutive, merge-free run on the current branch's first-parent chain.
-function squashable(tab) {
+// With intoParent, the oldest selected commit's parent joins the run, so one commit is enough.
+function squashable(tab, { intoParent = false } = {}) {
   const hashes = [...tab.selected];
   if (hashes.includes(LOCAL)) return { ok: false, reason: 'Local changes cannot be squashed' };
-  if (hashes.length < 2) return { ok: false, reason: 'Select at least two commits' };
+  if (!intoParent && hashes.length < 2) return { ok: false, reason: 'Select at least two commits' };
   const byHash = new Map(tab.commits.map((c) => [c.hash, c]));
   const chain = [];
   for (let cur = tab.summary.head; cur && byHash.has(cur); cur = byHash.get(cur).parents[0]) chain.push(byHash.get(cur));
@@ -341,6 +342,12 @@ function squashable(tab) {
   if (hi - lo + 1 !== pos.length) return { ok: false, reason: 'Selected commits must be consecutive' };
   const run = chain.slice(lo, hi + 1);
   if (run.some((c) => c.parents.length > 1)) return { ok: false, reason: 'Cannot squash across a merge commit' };
+  if (intoParent) {
+    const parent = chain[hi + 1];
+    if (!parent) return { ok: false, reason: byHash.get(run[run.length - 1].hash).parents.length ? 'Parent commit is not loaded' : 'Root commit has no parent' };
+    if (parent.parents.length > 1) return { ok: false, reason: 'Cannot squash into a merge commit' };
+    run.push(parent);
+  }
   const oldestFirst = run.slice().reverse();
   return { ok: true, hashes: oldestFirst.map((c) => c.hash), subjects: oldestFirst.map((c) => c.subject) };
 }
@@ -862,12 +869,12 @@ async function mergeFrom(t, target, label) {
   if (ok) await op(t, 'Merging…', () => api.git('merge', t.path, target));
 }
 
-async function squashSelected(t) {
-  const chk = squashable(t);
+async function squashSelected(t, intoParent = false) {
+  const chk = squashable(t, { intoParent });
   if (!chk.ok) return toast(chk.reason);
   const res = await modal({
-    title: `Squash ${chk.hashes.length} commits`,
-    fields: [{ name: 'message', label: 'Message for the squashed commit', type: 'textarea', rows: 8, value: chk.subjects.join('\n\n') }],
+    title: intoParent ? `Squash ${t.selected.size === 1 ? 'commit' : t.selected.size + ' commits'} into parent` : `Squash ${chk.hashes.length} commits`,
+    fields: [{ name: 'message', label: intoParent ? 'Message for the resulting commit (reword if needed)' : 'Message for the squashed commit', type: 'textarea', rows: 8, value: chk.subjects.join('\n\n') }],
     okLabel: 'Squash',
   });
   if (!res) return;
@@ -888,13 +895,16 @@ async function commitMenu(t, hash) {
   }
   if (sel.length > 1) {
     const chk = squashable(t);
+    const par = squashable(t, { intoParent: true });
     const id = await api.menu([
       { id: 'squash', label: `Squash ${sel.length} commits…`, enabled: chk.ok },
-      ...(chk.ok ? [] : [{ id: 'why', label: chk.reason, enabled: false }]),
+      { id: 'squash-parent', label: `Squash ${sel.length} commits into parent…`, enabled: par.ok },
+      ...(chk.ok || par.ok ? [] : [{ id: 'why', label: chk.reason, enabled: false }]),
       { separator: true },
       { id: 'copy', label: 'Copy SHAs' },
     ]);
     if (id === 'squash') squashSelected(t);
+    if (id === 'squash-parent') squashSelected(t, true);
     if (id === 'copy') api.copy(t.items.filter((it) => t.selected.has(it.commit.hash)).map((it) => it.commit.hash).join('\n'));
     return;
   }
@@ -904,6 +914,7 @@ async function commitMenu(t, hash) {
   const branches = commit.refs.filter((r) => r.type === 'branch' && !r.head);
   const remotes = commit.refs.filter((r) => r.type === 'remote' && !r.name.endsWith('/HEAD'));
   const tags = commit.refs.filter((r) => r.type === 'tag');
+  const intoParent = squashable(t, { intoParent: true });
   const label = `"${commit.subject.length > 40 ? commit.subject.slice(0, 40) + '…' : commit.subject}" (${shortSha(hash)})`;
   const id = await api.menu([
     { id: 'rebase', label: `Rebase ${branch} onto here`, enabled: !isHead },
@@ -918,6 +929,7 @@ async function commitMenu(t, hash) {
     { separator: true },
     { id: 'pick', label: 'Cherry-pick', enabled: !isHead },
     { id: 'revert', label: 'Revert commit' },
+    { id: 'squash-parent', label: 'Squash into parent…', enabled: intoParent.ok },
     { separator: true },
     { id: 'reset-soft', label: `Reset ${branch} to here (soft)`, enabled: !isHead },
     { id: 'reset-mixed', label: `Reset ${branch} to here (mixed)`, enabled: !isHead },
@@ -946,6 +958,7 @@ async function commitMenu(t, hash) {
     if (res && res.name.trim()) op(t, 'Tagging…', () => api.git('createTag', t.path, res.name.trim(), hash));
     return;
   }
+  if (id === 'squash-parent') return squashSelected(t, true);
   if (id === 'pick') return op(t, 'Cherry-picking…', () => api.git('cherryPick', t.path, hash));
   if (id === 'revert') return op(t, 'Reverting…', () => api.git('revert', t.path, hash));
   if (id.startsWith('reset-')) {
