@@ -88,13 +88,14 @@ function parseRefs(decoration) {
   if (!decoration) return refs;
   for (const part of decoration.split(', ')) {
     if (!part) continue;
+    if (part.startsWith('refs/')) continue; // stash, pull/*, notes: not branches
     if (part.startsWith('HEAD -> ')) {
       refs.push({ type: 'branch', name: part.slice(8), head: true });
     } else if (part === 'HEAD') {
       refs.push({ type: 'head', name: 'HEAD', head: true });
     } else if (part.startsWith('tag: ')) {
       refs.push({ type: 'tag', name: part.slice(5) });
-    } else if (part.includes('/') && !part.startsWith('refs/')) {
+    } else if (part.includes('/')) {
       // origin/main style; local branches with slashes (feature/x) are ambiguous, resolved by caller
       refs.push({ type: 'remote', name: part });
     } else {
@@ -109,7 +110,8 @@ async function log(cwd, { skip = 0, limit = 1500 } = {}) {
   let out;
   try {
     out = await run(cwd, [
-      'log', '--all', '--topo-order', `--skip=${skip}`, `-n${limit}`, `--format=${fmt}`,
+      // Not --all: that pulls in refs/stash, refs/pull/*, refs/original/* etc.
+      'log', '--branches', '--remotes', '--tags', 'HEAD', '--topo-order', `--skip=${skip}`, `-n${limit}`, `--format=${fmt}`,
     ]);
   } catch (e) {
     if (/does not have any commits|unknown revision/.test(e.message)) return [];

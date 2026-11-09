@@ -290,3 +290,14 @@ test('pruneGoneBranches deletes only requested branches whose upstream is gone',
   await assert.rejects(async () => git.pruneGoneBranches(dir, ['-D']), /Invalid ref/);
   await assert.rejects(async () => git.pruneGoneBranches(dir, 'gone-a'), /Invalid branch list/);
 });
+
+test('log ignores stash and other non-branch refs', async () => {
+  const dir = await makeRepo();
+  const base = await commitFile(dir, 'a.txt', '1\n', 'base');
+  fs.writeFileSync(path.join(dir, 'a.txt'), '2\n');
+  await sh(dir, 'stash', 'push', '-q');
+  await sh(dir, 'update-ref', 'refs/pull/1/head', base);
+  const commits = await git.log(dir);
+  assert.strictEqual(commits.length, 1);
+  assert.deepStrictEqual(commits[0].refs.map((r) => r.name), ['main']);
+});
