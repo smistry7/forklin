@@ -1,6 +1,6 @@
 {
   "name": "forklin",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A local-only Git client for Linux with a commit graph, tabs for multiple repos and one-click rebase.",
   "main": "src/main/main.js",
   "private": true,
@@ -8,7 +8,7 @@
   "scripts": {
     "start": "electron . --no-sandbox --no-zygote",
     "test": "node --test",
-    "dist:linux": "electron-builder --linux AppImage"
+    "dist:linux": "electron-builder --linux AppImage --publish never"
   },
   "devDependencies": {
     "electron": "^45.0.0",
