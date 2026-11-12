@@ -369,11 +369,13 @@ const stashDrop = (cwd, ref) => run(cwd, ['stash', 'drop', assertRef(ref)]);
 
 const fetch = (cwd) => run(cwd, ['fetch', '--all', '--prune']);
 const pull = (cwd) => run(cwd, ['pull', '--ff-only']);
-const push = async (cwd) => {
+// --force-with-lease refuses to overwrite remote commits we haven't fetched.
+const push = async (cwd, force) => {
+  const flags = force ? ['--force-with-lease'] : [];
   try {
-    return await run(cwd, ['push']);
+    return await run(cwd, ['push', ...flags]);
   } catch (e) {
-    if (/no upstream branch/.test(e.message)) return run(cwd, ['push', '--set-upstream', 'origin', 'HEAD']);
+    if (/no upstream branch/.test(e.message)) return run(cwd, ['push', ...flags, '--set-upstream', 'origin', 'HEAD']);
     throw e;
   }
 };

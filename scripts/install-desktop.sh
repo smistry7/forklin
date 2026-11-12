@@ -7,6 +7,10 @@ if [ ! -x "$APP_DIR/node_modules/.bin/electron" ]; then
   command -v npm >/dev/null || { echo "npm not found. Install a current Node.js (https://nodejs.org or nvm; apt's is often too old), then re-run." >&2; exit 1; }
   (cd "$APP_DIR" && npm install)
 fi
+# Electron has no postinstall: it would otherwise download its binary on first launch, which looks like a hang from the icon.
+if [ ! -x "$APP_DIR/node_modules/electron/dist/electron" ]; then
+  (cd "$APP_DIR" && node_modules/.bin/install-electron)
+fi
 mkdir -p "$HOME/.local/share/applications" "$HOME/.local/bin" "$HOME/.local/share/icons"
 cp "$APP_DIR/assets/forklin.svg" "$HOME/.local/share/icons/forklin.svg"
 ln -sf "$APP_DIR/bin/forklin" "$HOME/.local/bin/forklin"

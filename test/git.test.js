@@ -291,6 +291,22 @@ test('pruneGoneBranches deletes only requested branches whose upstream is gone',
   await assert.rejects(async () => git.pruneGoneBranches(dir, 'gone-a'), /Invalid branch list/);
 });
 
+test('push --force-with-lease rewrites the remote only when it is up to date', async () => {
+  const dir = await makeRepo();
+  await commitFile(dir, 'a.txt', '1\n', 'base');
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'forklin-bare-'));
+  await sh(bare, 'init', '-q', '--bare');
+  await sh(dir, 'remote', 'add', 'origin', bare);
+  await git.push(dir);
+  await commitFile(dir, 'b.txt', '2\n', 'to be rewritten');
+  await git.push(dir);
+  await sh(dir, 'commit', '-q', '--amend', '-m', 'rewritten');
+
+  await assert.rejects(async () => git.push(dir)); // plain push is non-fast-forward
+  await git.push(dir, true);
+  assert.strictEqual((await sh(bare, 'log', '-1', '--format=%s', 'main')).trim(), 'rewritten');
+});
+
 test('log ignores stash and other non-branch refs', async () => {
   const dir = await makeRepo();
   const base = await commitFile(dir, 'a.txt', '1\n', 'base');

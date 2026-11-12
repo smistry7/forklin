@@ -1,4 +1,5 @@
 #!/bin/bash
 # Launch Forklin. Usage: forklin [repo-path ...]   (e.g. `forklin .`)
 APP_DIR="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
-exec "$APP_DIR/node_modules/.bin/electron" "$APP_DIR" --no-sandbox "$@"
+# Run the binary directly: .bin/electron is a `#!/usr/bin/env node` script, and desktop launchers have no nvm node on PATH.
+exec "$APP_DIR/node_modules/electron/dist/electron" "$APP_DIR" --no-sandbox --no-zygote "$@"

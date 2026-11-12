@@ -412,12 +412,23 @@ function renderToolbar() {
     b('Fetch', 'Fetch all remotes', () => op(t, 'Fetching…', () => api.git('fetch', t.path))),
     b('Pull', 'Pull (fast-forward only)', () => op(t, 'Pulling…', () => api.git('pull', t.path))),
     b('Push', 'Push current branch', () => op(t, 'Pushing…', () => api.git('push', t.path))),
+    b('Force push', 'Force push current branch (with lease)', () => forcePush(t)),
     h('span', { class: 'sep' }),
     b('Stash', 'Stash local changes', () => stashChanges(t)),
     b('Refresh', 'Refresh (F5)', () => refresh(t)),
     h('span', { class: 'status' }, t.busy || '')
   );
   document.body.style.cursor = t.busy ? 'progress' : '';
+}
+
+async function forcePush(t) {
+  const ok = await api.confirm({
+    message: `Force push ${currentBranchLabel(t)}?`,
+    detail: 'This rewrites the branch on the remote and can discard commits others have pushed. It is refused if the remote has commits you have not fetched.',
+    confirmLabel: 'Force push',
+    danger: true,
+  });
+  if (ok) op(t, 'Force pushing…', () => api.git('push', t.path, true));
 }
 
 function renderBanner() {
