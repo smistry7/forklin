@@ -7,9 +7,44 @@
   "license": "MIT",
   "scripts": {
     "start": "electron . --no-sandbox --no-zygote",
-    "test": "node --test"
+    "test": "node --test",
+    "dist:linux": "electron-builder --linux AppImage"
   },
   "devDependencies": {
-    "electron": "^45.0.0"
-  }
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0"
+  },
+  "author": "Shyam Mistry",
+  "homepage": "https://github.com/smistry7/forklin",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smistry7/forklin.git"
+  },
+  "build": {
+    "appId": "io.github.smistry7.forklin",
+    "productName": "Forklin",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Development",
+      "icon": "build/icon.png",
+      "artifactName": "${name}-${version}-${arch}.${ext}",
+      "desktop": {
+        "entry": {
+          "Comment": "Local Git client with a commit graph, repo tabs and one-click rebase",
+          "StartupWMClass": "forklin"
+        }
+      },
+      "syncDesktopName": true
+    }
+  },
+  "desktopName": "forklin.desktop"
 }

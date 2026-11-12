@@ -15,9 +15,20 @@ A local-only Git client for Ubuntu, in the spirit of Fork. It shells out to your
 
 ## Install
 
+### AppImage (easiest, no Node.js needed)
+
+Download `forklin-<version>-x86_64.AppImage` from the [Releases page](https://github.com/smistry7/forklin/releases/latest), then:
+
+    chmod +x forklin-*.AppImage
+    ./forklin-*.AppImage /path/to/repo
+
+You need `git` 2.25 or newer installed. On Ubuntu 22.04+ the AppImage may also need FUSE 2: `sudo apt install libfuse2` (`libfuse2t64` on 24.04). Tools like [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher) can add it to your app grid.
+
+### From a source tarball
+
 Requirements: Linux (developed on Ubuntu 20.04+), `git` 2.25 or newer, and a current [Node.js](https://nodejs.org) with npm (apt's version is often too old; [nvm](https://github.com/nvm-sh/nvm) works well).
 
-Download the latest `forklin-<version>.tar.gz` from the [Releases page](https://github.com/smistry7/forklin/releases/latest), then:
+Download `forklin-<version>.tar.gz` from the Releases page, then:
 
     tar xzf forklin-*.tar.gz
     cd forklin-*/
@@ -40,6 +51,7 @@ To run without installing a launcher:
 
 ## Develop
 
+    npm run dist:linux   # build dist/*.AppImage
     npm test    # graph layout + real-git integration tests (needs git; tested on 2.25)
 
 - `src/main/git.js`: all git commands (no shell, refs starting with `-` rejected)

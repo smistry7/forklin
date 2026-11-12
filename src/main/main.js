@@ -11,6 +11,10 @@ const GIT_OPS = new Set([
   'addRemote', 'renameRemote', 'setRemoteUrl', 'removeRemote',
 ]);
 
+// The AppImage can't ship a setuid chrome-sandbox, and Ubuntu 24.04+ blocks the userns fallback
+// via AppArmor. Same trade-off as the --no-sandbox in bin/forklin and `npm start`.
+if (process.platform === 'linux' && app.isPackaged) app.commandLine.appendSwitch('no-sandbox');
+
 let win = null;
 const watchers = new Map(); // repo path -> { watcher, timer }
 
