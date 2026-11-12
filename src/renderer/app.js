@@ -40,7 +40,7 @@ const cur = () => tabs[active];
 function newTab(path) {
   return {
     path,
-    name: path.split('/').filter(Boolean).pop() || path,
+    name: path.split(/[\\/]/).filter(Boolean).pop() || path,
     summary: null,
     commits: [],
     items: [],

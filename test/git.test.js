@@ -14,6 +14,7 @@ async function makeRepo() {
   await sh(dir, 'symbolic-ref', 'HEAD', 'refs/heads/main'); // `init -b` needs git >= 2.28
   await sh(dir, 'config', 'user.email', 't@example.com');
   await sh(dir, 'config', 'user.name', 'Tester');
+  await sh(dir, 'config', 'core.autocrlf', 'false'); // keep Windows runners from rewriting line endings
   return dir;
 }
 

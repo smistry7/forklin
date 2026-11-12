@@ -47,7 +47,7 @@ async function watchRepo(repo) {
   const entry = { watcher: null, timer: null };
   try {
     entry.watcher = fs.watch(dir, { recursive: true }, (_evt, filename) => {
-      const f = String(filename || '');
+      const f = String(filename || '').replace(/\\/g, '/'); // Windows reports backslashes
       if (/^(objects|logs)(\/|$)/.test(f) || f.endsWith('.lock') || f === 'index') return;
       clearTimeout(entry.timer);
       entry.timer = setTimeout(() => send('repo-changed', repo), 300);
@@ -174,9 +174,13 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
+    const mac = process.platform === 'darwin';
     Menu.setApplicationMenu(
       Menu.buildFromTemplate([
-        { label: 'File', submenu: [{ role: 'quit' }] },
+        ...(mac ? [{ role: 'appMenu' }] : []),
+        { label: 'File', submenu: [{ role: mac ? 'close' : 'quit' }] },
+        // macOS only delivers Cmd+C/V/X/A to text fields through an Edit menu.
+        ...(mac ? [{ role: 'editMenu' }] : []),
         { label: 'View', submenu: [{ role: 'toggleDevTools' }, { type: 'separator' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'resetZoom' }] },
       ])
     );
