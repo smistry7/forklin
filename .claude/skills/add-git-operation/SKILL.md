@@ -14,8 +14,8 @@ Every op touches the same four places. Do them in this order.
    - Add it to `module.exports`.
 2. **`src/main/main.js`**: add the name to the `GIT_OPS` set. Without this the renderer gets "Unknown git operation".
 3. **Test first or alongside, `test/git.test.js`**: use `makeRepo()` and `commitFile()`; assert on resulting repo state (refs, log, status), not on stdout wording. Cover the failure path (invalid ref, conflict) too. Run `npm test`.
-4. **`src/renderer/app.js`**: call `await api.git('name', repo, ...)` (`api = window.forklin`) from a menu item/button. Catch errors with `toast(e.message)`, refresh the tab the same way neighbouring actions do (`refresh(tab)`), and use `api.confirm({ danger: true, ... })` if the action loses work.
+4. **`src/renderer/app.js`**: call `await api.git('name', repo, ...)` (`api = window.forklin`) from a menu item/button. Put any pure decision logic (parsing output, deciding what to show) in `src/renderer/logic.js` with a test in `test/logic.test.js`. Catch errors with `toast(e.message)`, refresh the tab the same way neighbouring actions do (`refresh(tab)`), and use `api.confirm({ danger: true, ... })` if the action loses work.
 
 If the op can leave the repo mid-operation (rebase/merge/cherry-pick/revert), check `operationState` in `git.js` and the conflict banner in `app.js` so Continue / Skip / Abort works for it.
 
-Finish by running `npm test`, and if possible launch the app against a scratch repo (`bin/forklin /tmp/scratch`) to exercise the UI path. Update the Features list in `README.md` if the feature is user-visible.
+Finish by running `npm test` and `xvfb-run -a npm run test:e2e`, and if possible launch the app against a scratch repo (`bin/forklin /tmp/scratch`) to exercise the UI path. If the feature is user-visible, also update the Features list in `README.md`, the guide in `docs/index.html` and, if the look changed, regenerate the screenshots (`xvfb-run -a npm run screenshots`).

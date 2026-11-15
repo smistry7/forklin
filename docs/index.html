@@ -127,18 +127,22 @@ scripts/install-desktop.sh   # npm install + app-grid entry + `forklin` command<
     <h2>Using Forklin</h2>
 
     <h3>Reading history</h3>
-    <p>Each coloured lane is a line of history. Badges mark branches (green is your checked-out branch), tags and remote branches. Click a commit to see its message, author, parent and per-file diffs in the right-hand panel.</p>
+    <p>Each coloured lane is a line of history. Badges mark branches, tags and remote branches, and a branch badge takes the colour of its lane. A local branch and its remote counterpart on the same commit share one badge (the small cloud marks the remote). If a commit has more than two refs, the rest collapse into a <b>+N</b> chip; hover it to list them. Your checked-out branch has the solid (filled) badge, and is bold with a ✓ in the sidebar. Hover a date for the full timestamp. Click a commit to see its message, author, parent and per-file diffs in the right-hand panel; diffs show line numbers and a file header with added/removed counts.</p>
+    <p>With nothing selected, the right-hand panel is a repository overview: current branch, upstream status (in sync, ahead/behind, or gone), and a summary of uncommitted changes with a <b>Review changes</b> button.</p>
     <figure>
       <img class="shot" src="images/commit.png" alt="Commit details panel showing the message, author, SHA, parent and a diff of the changed file">
       <figcaption>Selecting a commit shows its details and diff.</figcaption>
     </figure>
 
     <h3>Staging and committing</h3>
-    <p>Select <b>Local Changes</b> to see unstaged and staged files. Use <b>Stage all</b> / <b>Unstage all</b> or click individual files, check the diff, type a message and press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to commit. Tick <b>Amend last commit</b> to fold the change into the previous commit. Discarding changes asks for confirmation.</p>
+    <p>Select <b>Local Changes</b> to see unstaged and staged files. Use <b>Stage all</b> / <b>Unstage all</b>, or the <b>Stage</b> / <b>Unstage</b> / <b>Discard</b> buttons on each file row, check the diff, type a message and press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> or click the commit button, which reads <b>Commit N files</b>. Tick <b>Amend last commit</b> to fold the change into the previous commit (the button then reads <b>Amend commit</b>). Discarding changes asks for confirmation.</p>
     <figure>
       <img class="shot" src="images/changes.png" alt="Local changes panel with unstaged and staged files, a diff and a commit message box">
       <figcaption>Stage files, review the diff and commit from the Local Changes panel.</figcaption>
     </figure>
+
+    <h3>Searching</h3>
+    <p>Press <kbd>Ctrl</kbd>+<kbd>F</kbd> (or click the search box in the toolbar) and type to find commits by message, author, hash or branch/tag name. Matches are highlighted and counted; <kbd>Enter</kbd> and <kbd>Shift</kbd>+<kbd>Enter</kbd> jump to the next and previous match, and <kbd>Esc</kbd> clears the search. Search covers the commits loaded so far (the most recent 1,500, then more as you scroll).</p>
 
     <h3>Rebase onto here</h3>
     <p>Right-click any commit and choose <b>Rebase &lt;current branch&gt; onto here</b>. Uncommitted changes are autostashed. If there are conflicts, a banner offers <b>Continue</b>, <b>Skip</b> and <b>Abort</b>.</p>
@@ -168,7 +172,7 @@ scripts/install-desktop.sh   # npm install + app-grid entry + `forklin` command<
       <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>Search commits (<kbd>Enter</kbd> / <kbd>Shift</kbd>+<kbd>Enter</kbd> for next / previous match)</td></tr>
       <tr><td><kbd>F5</kbd></td><td>Refresh</td></tr>
       <tr><td><kbd>↑</kbd> / <kbd>↓</kbd></td><td>Move through commits</td></tr>
-      <tr><td><kbd>Esc</kbd></td><td>Clear the commit selection</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Clear the commit selection (or the search, when the search box has focus)</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>Commit (in the message box)</td></tr>
     </table>
   </section>

@@ -16,6 +16,7 @@ A local-only Git client for Ubuntu, in the spirit of Fork. It shells out to your
 - **Manage remotes**: the sidebar's Remotes section lists each remote with its URL and branches. "+" adds one; right-click a remote to edit its name/URL or remove it.
 - **Prune gone branches**: after a fetch, local branches whose upstream was deleted on the remote show "gone". The ✂ button on the sidebar's Branches header lists them and deletes them all (never the checked-out branch).
 - Also: checkout, create branch/tag, delete tag (locally and on remotes), merge, cherry-pick, revert, reset (soft/mixed/hard), stash, stage/unstage/discard, commit/amend, fetch/pull/push with ahead/behind counts (force push with lease is in the menu next to Push), diffs with line numbers.
+- **Repository overview** in the details pane when nothing is selected: branch, upstream status and a summary of uncommitted changes.
 - Changes made outside the app (terminal commits, etc.) refresh automatically.
 
 ## Screenshots
@@ -63,13 +64,15 @@ To run without installing a launcher:
 ## Develop
 
     npm run dist:linux   # build dist/*.AppImage
-    npm test    # graph layout + real-git integration tests (needs git; tested on 2.25)
+    npm test    # graph layout, renderer logic and real-git integration tests (needs git; tested on 2.25)
     xvfb-run -a npm run test:e2e   # UI smoke test against the real app (needs a display)
 
 - `src/main/git.js`: all git commands (no shell, refs starting with `-` rejected)
 - `src/renderer/graph.js`: lane layout (pure, unit-tested)
-- `src/renderer/app.js`: UI
+- `src/renderer/logic.js`: other pure renderer logic (ref pills, diff parsing, search, squash checks), unit-tested
+- `src/renderer/app.js`: UI (plain DOM); `styles.css` holds the theme tokens
 - `e2e/smoke.js`: drives the real app against a throwaway repo
+- `scripts/screenshots/`: regenerates the images in `docs/images` (`xvfb-run -a npm run screenshots`)
 - `docs/`: the [GitHub Pages site](https://smistry7.github.io/forklin/), deployed by `.github/workflows/pages.yml`
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
