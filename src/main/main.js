@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, clipboard, dialog, ipcMain } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const git = require('./git');
@@ -42,13 +42,18 @@ function send(channel, payload) {
 // Notify the renderer when refs / HEAD change from outside the app (e.g. a terminal commit).
 async function watchRepo(repo) {
   if (watchers.has(repo)) return;
+  // Reserve the slot before awaiting so concurrent opens don't create two watchers, and so a
+  // close that lands while gitDir is running (cancelled) is honoured instead of leaking one.
+  const entry = { watcher: null, timer: null, cancelled: false };
+  watchers.set(repo, entry);
   let dir;
   try {
     dir = await git.gitDir(repo);
   } catch {
+    if (watchers.get(repo) === entry) watchers.delete(repo);
     return;
   }
-  const entry = { watcher: null, timer: null };
+  if (entry.cancelled) return;
   try {
     entry.watcher = fs.watch(dir, { recursive: true }, (_evt, filename) => {
       const f = String(filename || '').replace(/\\/g, '/'); // Windows reports backslashes
@@ -58,14 +63,14 @@ async function watchRepo(repo) {
     });
     entry.watcher.on('error', () => {});
   } catch {
-    return;
+    if (watchers.get(repo) === entry) watchers.delete(repo);
   }
-  watchers.set(repo, entry);
 }
 
 function unwatchRepo(repo) {
   const entry = watchers.get(repo);
   if (!entry) return;
+  entry.cancelled = true;
   clearTimeout(entry.timer);
   entry.watcher && entry.watcher.close();
   watchers.delete(repo);
@@ -102,6 +107,7 @@ function createWindow() {
   win.on('focus', () => send('window-focus'));
   win.on('closed', () => {
     win = null;
+    for (const repo of [...watchers.keys()]) unwatchRepo(repo);
   });
 }
 
@@ -117,7 +123,10 @@ function registerIpc() {
   });
 
   ipcMain.handle('state:load', () => loadState());
-  ipcMain.handle('state:save', (_e, state) => saveState(state));
+  ipcMain.handle('state:save', (_e, state) => {
+    if (!state || !Array.isArray(state.tabs) || !state.tabs.every((p) => typeof p === 'string')) throw new Error('Invalid state');
+    saveState({ tabs: state.tabs, active: state.active | 0 });
+  });
 
   ipcMain.handle('repo:open', async (_e, dir) => {
     if (typeof dir !== 'string') return { ok: false, error: 'Invalid path' };
@@ -126,7 +135,7 @@ function registerIpc() {
     watchRepo(top);
     return { ok: true, value: top };
   });
-  ipcMain.handle('repo:close', (_e, repo) => unwatchRepo(repo));
+  ipcMain.handle('repo:close', (_e, repo) => typeof repo === 'string' && unwatchRepo(repo));
 
   ipcMain.handle('dialog:openRepo', async () => {
     const res = await dialog.showOpenDialog(win, {
@@ -151,6 +160,7 @@ function registerIpc() {
   // The renderer describes a menu; we show it natively and return the chosen id.
   ipcMain.handle('menu:popup', (_e, items) =>
     new Promise((resolve) => {
+      if (!Array.isArray(items)) return resolve(null);
       let chosen = null;
       const template = items.map((it) =>
         it.separator
@@ -161,8 +171,7 @@ function registerIpc() {
     })
   );
 
-  ipcMain.handle('clipboard:write', (_e, text) => require('electron').clipboard.writeText(String(text)));
-  ipcMain.handle('shell:showInFolder', (_e, p) => shell.showItemInFolder(p));
+  ipcMain.handle('clipboard:write', (_e, text) => clipboard.writeText(String(text)));
 }
 
 const gotLock = app.requestSingleInstanceLock();
