@@ -63,10 +63,15 @@ To run without installing a launcher:
 
     npm run dist:linux   # build dist/*.AppImage
     npm test    # graph layout + real-git integration tests (needs git; tested on 2.25)
+    xvfb-run -a npm run test:e2e   # UI smoke test against the real app (needs a display)
 
 - `src/main/git.js`: all git commands (no shell, refs starting with `-` rejected)
 - `src/renderer/graph.js`: lane layout (pure, unit-tested)
 - `src/renderer/app.js`: UI
+- `e2e/smoke.js`: drives the real app against a throwaway repo
+- `docs/`: the [GitHub Pages site](https://smistry7.github.io/forklin/), deployed by `.github/workflows/pages.yml`
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 
 ## License
 

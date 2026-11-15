@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     strategy:
@@ -20,3 +27,16 @@ jobs:
       - run: git --version
       # No `npm ci`: the tests only use Node and git, not Electron.
       - run: npm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      # Electron has no postinstall, so fetch its binary explicitly.
+      - run: npx install-electron
+      - run: xvfb-run -a npm run test:e2e

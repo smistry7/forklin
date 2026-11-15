@@ -8,6 +8,7 @@
   "scripts": {
     "start": "electron . --no-sandbox --no-zygote",
     "test": "node --test",
+    "test:e2e": "node e2e/smoke.js",
     "dist:linux": "electron-builder --linux AppImage --publish never"
   },
   "devDependencies": {

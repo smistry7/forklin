@@ -5,6 +5,7 @@ Local-only Git client (Electron, plain JS, no bundler/framework). Shells out to 
 ## Commands
 
 - `npm test`: `node --test`; graph unit tests plus integration tests against real temp repos. Run before every commit.
+- `xvfb-run -a npm run test:e2e`: UI smoke test (`e2e/smoke.js`) that launches the real app and drives it over CDP. Run it after renderer or main-process changes.
 - `npm start` or `bin/forklin /path/to/repo`: launch the app (`--no-sandbox` is intentional, see README).
 
 ## Architecture
@@ -30,7 +31,8 @@ Data flow: UI -> `api.git(op, repo, ...args)` (`api = window.forklin`) -> IPC `g
 
 - New git behaviour needs an integration test in `test/git.test.js` using `makeRepo()` / `commitFile()` helpers (real git, temp dirs).
 - New graph/layout behaviour needs a case in `test/graph.test.js`.
-- UI-only changes can't be unit tested; run the app against a scratch repo and state that you did so (or that you couldn't).
+- UI-only changes can't be unit tested; run `npm run test:e2e` and the app against a scratch repo, and state that you did so (or that you couldn't). In containers, Chromium's zygote crashes the renderer, so launch without `--no-zygote` there.
+- `docs/` is the GitHub Pages site (plain HTML, deployed by Actions). Keep it in step with README features; screenshots are in `docs/images`.
 
 ## Adding a feature
 
