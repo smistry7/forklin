@@ -40,7 +40,7 @@ function assertRef(name) {
 }
 
 function assertSha(sha) {
-  if (!/^[0-9a-f]{7,40}$/i.test(sha)) throw new Error(`Invalid commit id: ${sha}`);
+  if (typeof sha !== 'string' || !/^[0-9a-f]{7,40}$/i.test(sha)) throw new Error(`Invalid commit id: ${sha}`);
   return sha;
 }
 
@@ -49,6 +49,14 @@ function assertUrl(url) {
     throw new Error(`Invalid remote URL: ${url}`);
   }
   return url.trim();
+}
+
+// For `diff --no-index`, which reads any file git is pointed at: keep it inside the repo.
+function assertInRepo(cwd, file) {
+  assertPaths([file]);
+  const abs = path.resolve(cwd, file);
+  if (abs !== cwd && !abs.startsWith(cwd.endsWith(path.sep) ? cwd : cwd + path.sep)) throw new Error(`Path is outside the repository: ${file}`);
+  return file;
 }
 
 function assertPaths(paths) {
@@ -231,16 +239,16 @@ async function commitDetail(cwd, sha) {
 
 async function commitFileDiff(cwd, sha, file) {
   assertSha(sha);
-  return run(cwd, ['show', '--format=', '--first-parent', '-M', sha, '--', file]);
+  return run(cwd, ['show', '--format=', '--first-parent', '-M', sha, '--', ...assertPaths([file])]);
 }
 
 async function workingDiff(cwd, file, staged, untracked) {
   if (untracked) {
-    return run(cwd, ['diff', '--no-index', '--', '/dev/null', file], { allowCodes: [0, 1] });
+    return run(cwd, ['diff', '--no-index', '--', '/dev/null', assertInRepo(cwd, file)], { allowCodes: [0, 1] });
   }
   const args = ['diff'];
   if (staged) args.push('--cached');
-  args.push('--', file);
+  args.push('--', ...assertPaths([file]));
   return run(cwd, args);
 }
 
@@ -254,6 +262,8 @@ const unstage = async (cwd, paths) => {
   }
 };
 const discard = async (cwd, files) => {
+  if (!Array.isArray(files) || files.some((f) => !f || typeof f !== 'object')) throw new Error('Invalid files');
+  assertPaths(files.map((f) => f.path));
   for (const f of files) {
     if (f.untracked) await run(cwd, ['clean', '-f', '--', f.path]);
     else await run(cwd, ['checkout', '--', f.path]);
@@ -267,7 +277,8 @@ const commit = (cwd, message, amend) => {
 const checkout = (cwd, ref) => run(cwd, ['checkout', assertRef(ref)]);
 const checkoutRemote = (cwd, remoteRef) => {
   const local = assertRef(remoteRef).split('/').slice(1).join('/');
-  return run(cwd, ['checkout', '-b', local, '--track', remoteRef]);
+  // 'origin/-x' would otherwise hand `-x` to checkout as an option.
+  return run(cwd, ['checkout', '-b', assertRef(local), '--track', remoteRef]);
 };
 const createBranch = (cwd, name, startPoint, checkoutAfter) =>
   checkoutAfter

@@ -318,3 +318,19 @@ test('log ignores stash and other non-branch refs', async () => {
   assert.strictEqual(commits.length, 1);
   assert.deepStrictEqual(commits[0].refs.map((r) => r.name), ['main']);
 });
+
+test('renderer-supplied paths and refs are validated', async () => {
+  const dir = await makeRepo();
+  const sha = await commitFile(dir, 'a.txt', '1\n', 'base');
+  const outside = path.join(os.tmpdir(), `forklin-outside-${process.pid}.txt`);
+  fs.writeFileSync(outside, 'secret\n');
+  await assert.rejects(git.workingDiff(dir, outside, false, true), /outside the repository/);
+  await assert.rejects(git.workingDiff(dir, '../../etc/passwd', false, true), /outside the repository/);
+  await assert.rejects(git.workingDiff(dir, 42, false, false), /Invalid paths/);
+  await assert.rejects(git.commitFileDiff(dir, sha, null), /Invalid paths/);
+  await assert.rejects(git.commitFileDiff(dir, 123456789, 'a.txt'), /Invalid commit id/);
+  await assert.rejects(git.discard(dir, [{ path: 5 }]), /Invalid paths/);
+  await assert.rejects(git.discard(dir, 'a.txt'), /Invalid files/);
+  assert.throws(() => git.checkoutRemote(dir, 'origin/-x'), /Invalid ref/);
+  fs.rmSync(outside);
+});
