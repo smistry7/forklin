@@ -1,12 +1,13 @@
 'use strict';
 
 const api = window.forklin;
-const ROW_H = 26;
+const ROW_H = 28;
 const LANE_W = 14;
 const MAX_LANES = 14;
 const PAGE = 1500;
-const { LOCAL, isConflict, isUnstaged, isStaged, shortSha, stagePaths, localNameForRemote, reconcileRefs, groupRemoteBranches, diffLineClass } = Logic;
-const LANE_COLORS = ['#4c8dff', '#e5534b', '#57ab5a', '#daaa3f', '#b083f0', '#39c5cf', '#f47067', '#e275ad'];
+const { LOCAL, groupRefs, compactDate, initials, upstreamStatus, remoteHost, isConflict, isUnstaged, isStaged, shortSha, stagePaths, localNameForRemote, reconcileRefs, groupRemoteBranches, parseDiff, findCommits, splitPath } = Logic;
+const LANE_COLORS = ['#5b9dff', '#2fc4b2', '#a98bf5', '#e0a93b', '#e279b4', '#6cc3f0', '#8fd35a', '#f0955a'];
+const MAX_PILLS = 2;
 const dateFmt = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 const $ = (sel) => document.querySelector(sel);
@@ -59,6 +60,7 @@ function newTab(path) {
     busy: null,
     token: 0,
     scrollTop: 0,
+    search: { q: '', hits: [], pos: -1 },
   };
 }
 
@@ -226,6 +228,8 @@ function rebuild(tab) {
   tab.items = entries.map((commit, i) => ({ commit, row: rows[i] }));
   tab.index = new Map(tab.items.map((it, i) => [it.commit.hash, i]));
   tab.lanes = Math.min(MAX_LANES, Math.max(1, ...rows.map((r) => r.width)));
+  tab.search.hits = findCommits(tab.items, tab.search.q);
+  tab.search.pos = tab.search.hits.length ? Math.min(Math.max(tab.search.pos, 0), tab.search.hits.length - 1) : -1;
   for (const hsh of [...tab.selected]) if (!tab.index.has(hsh) && hsh !== LOCAL) tab.selected.delete(hsh);
   if (tab.focus && !tab.index.has(tab.focus) && tab.focus !== LOCAL) tab.focus = null;
   if (tab.selected.size === 0) tab.focus = null;
@@ -359,27 +363,80 @@ function renderTabs() {
       },
         h('span', { class: 'tname' }, t.name),
         t.summary && t.summary.branches.current ? h('span', { class: 'tbranch' }, t.summary.branches.current) : null,
+        t.summary && t.summary.status.length ? h('span', { class: 'dirty', title: `${t.summary.status.length} uncommitted change${t.summary.status.length === 1 ? '' : 's'}` }) : null,
         h('button', { class: 'x', title: 'Close tab (Ctrl+W)', on: { click: (e) => { e.stopPropagation(); closeTab(i); } } }, '×'))
     )
   );
 }
 
+const ICONS = {
+  branch: 'M4 2v8M4 10a2 2 0 1 0 0 .01M10 4a2 2 0 1 0 0 .01M10 6c0 3-6 1-6 4',
+  fetch: 'M7 2v8M3.5 6.5 7 10l3.5-3.5M2.5 12.5h9',
+  pull: 'M7 2v8M3.5 6.5 7 10l3.5-3.5',
+  push: 'M7 12V4M3.5 7.5 7 4l3.5 3.5',
+  stash: 'M2 3h10v3H2zM3 6v6h8V6M5.5 8.5h3',
+  refresh: 'M11.5 7a4.5 4.5 0 1 1-1.3-3.2M11.5 2v2.5H9',
+  chevron: 'M3.5 5.5 7 9l3.5-3.5',
+};
+function icon(name) {
+  const svg = s('svg', { class: 'ic', width: 14, height: 14, viewBox: '0 0 14 14', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+  svg.append(s('path', { d: ICONS[name] }));
+  return svg;
+}
+
 function renderToolbar() {
   const t = cur();
-  const b = (label, title, fn, extra = {}) =>
-    h('button', { title, disabled: !!t.busy || !t.summary, on: { click: fn }, ...extra }, label);
-  $('#toolbar').replaceChildren(
-    h('span', { class: 'branch' }, t.summary ? `⎇ ${currentBranchLabel(t)}` : '…'),
-    b('Fetch', 'Fetch all remotes', () => op(t, 'Fetching…', () => api.git('fetch', t.path))),
-    b('Pull', 'Pull (fast-forward only)', () => op(t, 'Pulling…', () => api.git('pull', t.path))),
-    b('Push', 'Push current branch', () => op(t, 'Pushing…', () => api.git('push', t.path))),
-    b('Force push', 'Force push current branch (with lease)', () => forcePush(t)),
+  const current = t.summary && t.summary.branches.local.find((b) => b.current);
+  const up = upstreamStatus(current);
+  const dis = !!t.busy || !t.summary;
+  const b = (ic, label, title, fn, extra) =>
+    h('button', { title, disabled: dis, on: { click: fn } }, icon(ic), label, extra || null);
+  const count = (n, arrow) => (n ? h('span', { class: 'n' }, `${arrow}${n}`) : null);
+  $('#tb-actions').replaceChildren(
+    h('span', { class: 'branch', title: 'Current branch' }, icon('branch'), h('span', {}, t.summary ? currentBranchLabel(t) : '…')),
+    h('div', { class: 'seg' },
+      b('fetch', 'Fetch', 'Fetch all remotes', () => op(t, 'Fetching…', () => api.git('fetch', t.path))),
+      b('pull', 'Pull', 'Pull (fast-forward only)', () => op(t, 'Pulling…', () => api.git('pull', t.path)), count(up.behind, '↓')),
+      b('push', 'Push', 'Push current branch', () => op(t, 'Pushing…', () => api.git('push', t.path)), count(up.ahead, '↑')),
+      h('button', { class: 'chev', title: 'More push options', 'aria-label': 'More push options', disabled: dis, on: { click: () => pushMenu(t) } }, icon('chevron'))),
     h('span', { class: 'sep' }),
-    b('Stash', 'Stash local changes', () => stashChanges(t)),
-    b('Refresh', 'Refresh (F5)', () => refresh(t)),
+    b('stash', 'Stash', 'Stash local changes', () => stashChanges(t)),
     h('span', { class: 'status' }, t.busy || '')
   );
+  const refresh$ = $('#tb-refresh');
+  refresh$.replaceChildren(icon('refresh'));
+  refresh$.disabled = !!t.busy || !t.summary;
+  if (document.activeElement !== $('#search')) $('#search').value = t.search.q;
+  updateSearchCount(t);
   document.body.style.cursor = t.busy ? 'progress' : '';
+}
+
+async function pushMenu(t) {
+  const id = await api.menu([{ id: 'force', label: 'Force push (with lease)…' }]);
+  if (id === 'force') forcePush(t);
+}
+
+// ---- commit search (over the loaded history): Enter / Shift+Enter step through matches
+
+function updateSearchCount(t) {
+  const { q, hits, pos } = t.search;
+  $('#search-count').textContent = !q.trim() ? '' : hits.length ? `${pos + 1}/${hits.length}` : 'none';
+}
+
+function runSearch(t) {
+  t.search.hits = findCommits(t.items, t.search.q);
+  t.search.pos = t.search.hits.length ? 0 : -1;
+  updateSearchCount(t);
+  if (t.search.pos >= 0) scrollToIndex(t.search.hits[0]);
+  else renderRows();
+}
+
+function stepSearch(t, dir) {
+  const { hits } = t.search;
+  if (!hits.length) return;
+  t.search.pos = (t.search.pos + dir + hits.length) % hits.length;
+  updateSearchCount(t);
+  scrollToIndex(hits[t.search.pos]);
 }
 
 async function forcePush(t) {
@@ -416,26 +473,33 @@ function renderBanner() {
   ].flat().filter(Boolean));
 }
 
+function jumpTo(t, hash) {
+  const i = t.index.get(hash);
+  if (i == null && hash !== LOCAL) return toast('That commit is not in the loaded history yet', 'info');
+  t.selected = new Set([hash]);
+  t.anchor = t.focus = hash;
+  if (i != null) scrollToIndex(i);
+  afterSelect(t);
+}
+
 function renderSidebar() {
   const t = cur();
   const sb = $('#sidebar');
   if (!t.summary) return sb.replaceChildren();
   const { local, remote, tags } = t.summary.branches;
-  const jump = (hash) => {
+  const jump = (hash) => jumpTo(t, hash);
+  const onlySel = t.selected.size === 1 ? [...t.selected][0] : null;
+  const laneDot = (hash) => {
     const i = t.index.get(hash);
-    if (i == null && hash !== LOCAL) return toast('That commit is not in the loaded history yet', 'info');
-    t.selected = new Set([hash]);
-    t.anchor = t.focus = hash;
-    if (i != null) scrollToIndex(i);
-    afterSelect(t);
+    return h('span', { class: 'dot', style: i != null ? `background:${LANE_COLORS[t.items[i].row.color]}` : '' });
   };
   const section = (title, items) => items.length ? h('div', { class: 'sec' }, h('h4', {}, title), items) : null;
 
   const changes = t.summary.status.length;
   sb.replaceChildren(...[
     h('div', { class: 'sec' },
-      h('div', { class: 'item local', on: { click: () => jump(LOCAL) } }, `Local Changes${changes ? ` (${changes})` : ''}`)),
-    section(['Branches', pruneButton(t)], local.map((b) =>
+      h('div', { class: 'item local' + (onlySel === LOCAL ? ' sel' : ''), on: { click: () => jump(LOCAL) } }, 'Local Changes', changes ? h('span', { class: 'count' }, changes) : null)),
+    section(['Branches', h('span', { class: 'n' }, local.length), pruneButton(t)], local.map((b) =>
       h('div', {
         class: 'item' + (b.current ? ' current' : ''),
         title: b.name,
@@ -444,7 +508,7 @@ function renderSidebar() {
           dblclick: () => op(t, 'Checking out…', () => api.git('checkout', t.path, b.name)),
           contextmenu: (e) => { e.preventDefault(); refMenu(t, { name: b.name, kind: 'local', current: b.current }); },
         },
-      }, b.name, b.track ? h('span', { class: 'track' }, b.track.replace(/[\[\]]/g, '').replace('ahead ', '↑').replace('behind ', '↓').replace(', ', ' ')) : null))),
+      }, laneDot(b.hash), b.name, b.track ? h('span', { class: 'track' }, b.track.replace(/[\[\]]/g, '').replace('ahead ', '↑').replace('behind ', '↓').replace(', ', ' ')) : null, b.current ? h('span', { class: 'check' }, '✓') : null))),
     remotesSection(t, jump),
     section('Tags', tags.map((tg) =>
       h('div', {
@@ -458,10 +522,10 @@ function renderSidebar() {
       }, tg.name))),
     section('Stashes', t.summary.stashes.map((st) =>
       h('div', {
-        class: 'item',
+        class: 'item stash',
         title: st.subject,
         on: { contextmenu: (e) => { e.preventDefault(); stashMenu(t, st); } },
-      }, st.subject)))
+      }, st.ref, h('small', {}, st.subject))))
   ].filter(Boolean));
 }
 
@@ -475,7 +539,7 @@ function remotesSection(t, jump) {
         class: 'item remote',
         title: remote.url,
         on: { contextmenu: (e) => { e.preventDefault(); remoteMenu(t, remote); } },
-      }, remote.name, h('span', { class: 'track' }, remote.url)),
+      }, remote.name, h('span', { class: 'track' }, remoteHost(remote.url))),
       branches.map((b) =>
         h('div', {
           class: 'item nested',
@@ -543,18 +607,32 @@ function graphSvg(tab, item, headHash) {
   }
   const cx = x(item.row.col);
   const color = LANE_COLORS[item.row.color];
-  if (item.commit.hash === LOCAL) svg.append(s('circle', { cx, cy: mid, r: 4.5, fill: '#1e1f22', stroke: color, 'stroke-width': 2, 'stroke-dasharray': '2 2' }));
+  if (item.commit.hash === LOCAL) svg.append(s('circle', { cx, cy: mid, r: 4.5, fill: '#1b1c1f', stroke: color, 'stroke-width': 2, 'stroke-dasharray': '2 2' }));
   else if (item.commit.hash === headHash) svg.append(s('circle', { cx, cy: mid, r: 5.5, fill: color, stroke: '#fff', 'stroke-width': 2 }));
-  else svg.append(s('circle', { cx, cy: mid, r: 4, fill: color, stroke: '#1e1f22', 'stroke-width': 1 }));
+  else svg.append(s('circle', { cx, cy: mid, r: 4, fill: color, stroke: '#1b1c1f', 'stroke-width': 1 }));
   return svg;
 }
 
-function refBadges(commit) {
-  const order = { head: 0, branch: 1, remote: 2, tag: 3 };
-  return commit.refs
-    .slice()
-    .sort((a, b) => (b.head ? 1 : 0) - (a.head ? 1 : 0) || order[a.type] - order[b.type])
-    .map((r) => h('span', { class: `badge ${r.head ? 'head' : r.type}`, title: r.name }, r.name));
+function cloudIcon() {
+  const svg = s('svg', { width: 11, height: 11, viewBox: '0 0 14 14', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.5 });
+  svg.append(s('path', { d: 'M3.5 11a2.5 2.5 0 0 1 .3-5 3.5 3.5 0 0 1 6.7.8A2.2 2.2 0 0 1 10.8 11z' }));
+  return svg;
+}
+
+// At most MAX_PILLS pills inline; the rest collapse into a "+N" chip whose tooltip lists them.
+function refPills(tab, commit) {
+  const pills = groupRefs(commit.refs, tab.summary.remotes.map((r) => r.name));
+  const shown = pills.slice(0, MAX_PILLS);
+  const rest = pills.slice(MAX_PILLS);
+  return h('div', { class: 'refs' },
+    shown.map((p) => h('span', { class: `badge ${p.kind}`, title: p.remote ? `${p.name} (also ${p.remote})` : p.name }, h('span', { class: 'nm' }, p.name), p.remote ? h('span', { class: 'twin' }, cloudIcon()) : null)),
+    rest.length ? h('span', { class: 'badge more', title: rest.map((p) => p.name).join('\n') }, `+${rest.length}`) : null);
+}
+
+function avatar(name) {
+  let n = 0;
+  for (const ch of String(name)) n = (n * 31 + ch.charCodeAt(0)) >>> 0;
+  return h('span', { class: 'avatar', style: `background:${LANE_COLORS[n % LANE_COLORS.length]}` }, initials(name));
 }
 
 function rowEl(tab, i) {
@@ -567,11 +645,12 @@ function rowEl(tab, i) {
   if (c.hash === head) cls.push('head');
   if (tab.selected.has(c.hash)) cls.push('sel');
   if (tab.focus === c.hash) cls.push('focus');
-  const el = h('div', { class: cls.join(' '), style: `top:${i * ROW_H}px`, 'data-i': i },
+  if (tab.search.hits.includes(i)) cls.push('match');
+  const el = h('div', { class: cls.join(' '), style: `top:${i * ROW_H}px;--lane:${LANE_COLORS[item.row.color]}`, 'data-i': i },
     graphSvg(tab, item, head),
-    h('div', { class: 'msg' }, refBadges(c), h('span', { class: 'subject', title: c.subject }, c.subject)),
-    h('div', { class: 'author', title: c.email || '' }, c.author),
-    h('div', { class: 'date' }, isLocal ? '' : dateFmt.format(c.time)),
+    h('div', { class: 'msg' }, refPills(tab, c), h('span', { class: 'subject', title: c.subject }, c.subject)),
+    h('div', { class: 'author', title: c.email || '' }, isLocal ? null : avatar(c.author), h('span', {}, c.author)),
+    h('div', { class: 'date', title: isLocal ? '' : dateFmt.format(c.time) }, isLocal ? '' : compactDate(c.time)),
     h('div', { class: 'sha' }, isLocal ? '' : shortSha(c.hash)));
   return el;
 }
@@ -647,6 +726,7 @@ function afterSelect(tab) {
   tab.diff = null;
   tab.diffFile = null;
   renderRows();
+  renderSidebar();
   renderDetails();
   loadDetail(tab);
 }
@@ -657,19 +737,28 @@ function statusBadge(letter) {
   return h('span', { class: `st ${letter}` }, letter);
 }
 
-function renderDiff(text) {
+// The file whose diff is showing: the committed file for a commit, the working-tree file for Local Changes.
+const diffName = (t) => ([...t.selected][0] === LOCAL ? t.wfile && t.wfile.path : t.diffFile);
+
+function fileLabel(file) {
+  const { dir, name } = splitPath(file);
+  return [dir ? h('span', { class: 'dir' }, dir) : null, h('span', { class: 'nm' }, name)];
+}
+
+function renderDiff(text, file) {
   const box = h('div', { class: 'diff' });
-  if (!text || !text.trim()) {
+  const { rows, adds, dels } = parseDiff(text);
+  if (!rows.length) {
     box.append(h('div', { class: 'dmeta' }, 'No textual changes'));
     return box;
   }
-  const lines = text.split('\n');
   const MAX = 5000;
   const frag = document.createDocumentFragment();
-  for (const l of lines.slice(0, MAX)) {
-    frag.append(h('div', { class: diffLineClass(l) }, l || ' '));
+  if (file) frag.append(h('div', { class: 'diffbar' }, h('span', { class: 'path' }, fileLabel(file)), h('span', { class: 'cnt' }, h('span', { class: 'ok' }, `+${adds}`), ' ', h('span', { style: 'color:var(--delfg)' }, `−${dels}`))));
+  for (const r of rows.slice(0, MAX)) {
+    frag.append(h('div', { class: `dl ${r.kind}` }, h('span', { class: 'ln' }, r.old ?? ''), h('span', { class: 'ln' }, r.new ?? ''), h('span', { class: 'tx' }, r.text || ' ')));
   }
-  if (lines.length > MAX) frag.append(h('div', { class: 'dmeta' }, `… diff truncated (${lines.length - MAX} more lines)`));
+  if (rows.length > MAX) frag.append(h('div', { class: 'dmeta' }, `… diff truncated (${rows.length - MAX} more lines)`));
   box.append(frag);
   return box;
 }
@@ -685,7 +774,7 @@ function renderDiffArea() {
   const old = $('#details .diff');
   const t = cur();
   if (!old || !t) return;
-  const fresh = t.diff ? renderDiff(t.diff.text) : emptyDiff(t);
+  const fresh = t.diff ? renderDiff(t.diff.text, diffName(t)) : emptyDiff(t);
   old.replaceWith(fresh);
 }
 
@@ -694,7 +783,8 @@ function renderDetails() {
   const el = $('#details');
   if (!t || !t.summary) return el.replaceChildren();
   const sel = [...t.selected];
-  if (sel.length === 0) return el.replaceChildren(h('div', { class: 'placeholder' }, 'Select a commit to see its changes.\nCtrl/Shift-click to select several.'));
+  el.classList.toggle('overview', sel.length === 0);
+  if (sel.length === 0) return el.replaceChildren(renderOverview(t));
   if (sel.length > 1) return renderMultiSelect(t, el);
   if (sel[0] === LOCAL) return renderLocalChanges(t, el);
   if (!t.detail || t.detail.hash !== sel[0]) return el.replaceChildren(h('div', { class: 'placeholder' }, 'Loading…'));
@@ -716,9 +806,36 @@ function renderDetails() {
       h('h5', {}, `${d.files.length} changed file${d.files.length === 1 ? '' : 's'}`),
       d.files.map((f) =>
         h('div', { class: 'file' + (f.path === t.diffFile ? ' sel' : ''), title: f.from ? `${f.from} → ${f.path}` : f.path, on: { click: () => { t.diffFile = f.path; renderDetails(); loadCommitDiff(t); } } },
-          statusBadge(f.status), h('span', { class: 'path' }, '‎' + f.path)))),
-    t.diff ? renderDiff(t.diff.text) : h('div', { class: 'diff' })
+          statusBadge(f.status), h('span', { class: 'path' }, fileLabel(f.path))))),
+    t.diff ? renderDiff(t.diff.text, diffName(t)) : h('div', { class: 'diff' })
   );
+}
+
+function upstreamLabel(branch) {
+  const u = upstreamStatus(branch);
+  if (!u.upstream) return h('span', { class: 'muted' }, 'No upstream');
+  if (u.gone) return h('span', { class: 'warn' }, `${u.upstream} (gone)`);
+  if (!u.ahead && !u.behind) return h('span', { class: 'ok' }, `✓ In sync with ${u.upstream}`);
+  return h('span', { class: 'warn' }, `${u.upstream} ${u.ahead ? '↑' + u.ahead : ''} ${u.behind ? '↓' + u.behind : ''}`.replace(/\s+/g, ' '));
+}
+
+// Shown in the details pane when nothing is selected.
+function renderOverview(t) {
+  const files = t.summary.status;
+  const staged = files.filter(isStaged).length;
+  const current = t.summary.branches.local.find((b) => b.current);
+  return h('div', { class: 'ov' },
+    h('h3', {}, t.name),
+    h('dl', {}, h('dt', {}, 'Branch'), h('dd', {}, currentBranchLabel(t)), h('dt', {}, 'Upstream'), h('dd', {}, current ? upstreamLabel(current) : '–')),
+    files.length
+      ? h('div', { class: 'card' },
+          h('b', {}, `${files.length} uncommitted change${files.length === 1 ? '' : 's'}`),
+          h('span', { class: 'muted' }, `${files.length - staged} unstaged · ${staged} staged`),
+          files.slice(0, 5).map((f) => h('div', { class: 'f' }, statusBadge(isConflict(f) ? 'U' : f.index === '?' ? '?' : f.index !== ' ' ? f.index : f.worktree), f.path)),
+          files.length > 5 ? h('span', { class: 'muted' }, `+${files.length - 5} more`) : null,
+          h('button', { class: 'primary', on: { click: () => jumpTo(t, LOCAL) } }, 'Review changes'))
+      : h('div', { class: 'card' }, h('b', {}, 'Working tree clean')),
+    h('div', { class: 'hint' }, 'Select a commit to see its changes. Ctrl/Shift-click to select several. ↑ ↓ to move through commits.'));
 }
 
 function renderMultiSelect(t, el) {
@@ -750,7 +867,7 @@ function renderLocalChanges(t, el) {
       title: f.path,
       on: { click: () => { t.wfile = { path: f.path, staged: isStagedList, untracked: f.index === '?' }; renderDetails(); loadWorkingDiff(t); } },
     },
-      statusBadge(letter), h('span', { class: 'path' }, '‎' + f.path),
+      statusBadge(letter), h('span', { class: 'path' }, fileLabel(f.path)),
       h('span', { class: 'acts' },
         isStagedList
           ? act('Unstage', 'Unstage file', () => op(t, 'Unstaging…', () => api.git('unstage', t.path, paths)))
@@ -763,7 +880,10 @@ function renderLocalChanges(t, el) {
   const amend = h('input', { type: 'checkbox', id: 'amend' });
   amend.checked = t.amend;
   const commitBtn = h('button', { class: 'primary', on: { click: () => doCommit(t) } }, 'Commit');
-  const updateBtn = () => (commitBtn.disabled = !!t.busy || (!staged.length && !t.amend) || !t.message.trim());
+  const updateBtn = () => {
+    commitBtn.disabled = !!t.busy || (!staged.length && !t.amend) || !t.message.trim();
+    commitBtn.textContent = t.amend ? 'Amend commit' : staged.length ? `Commit ${staged.length} file${staged.length === 1 ? '' : 's'}` : 'Commit';
+  };
   msg.addEventListener('input', () => { t.message = msg.value; updateBtn(); });
   msg.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.ctrlKey && !commitBtn.disabled) doCommit(t); });
   amend.addEventListener('change', () => { t.amend = amend.checked; updateBtn(); });
@@ -779,7 +899,7 @@ function renderLocalChanges(t, el) {
       h('h5', {}, `Staged (${staged.length})`,
         h('button', { disabled: !staged.length || !!t.busy, on: { click: () => op(t, 'Unstaging…', () => api.git('unstage', t.path, staged.flatMap(stagePaths))) } }, 'Unstage all')),
       staged.map((f) => fileRow(f, true))),
-    t.diff ? renderDiff(t.diff.text) : emptyDiff(t),
+    t.diff ? renderDiff(t.diff.text, diffName(t)) : emptyDiff(t),
     h('div', { class: 'commitbox' }, msg,
       h('div', { class: 'row2' }, h('label', {}, amend, ' Amend last commit'), h('span', { class: 'grow' }), commitBtn))
   );
@@ -1060,6 +1180,7 @@ document.addEventListener('keydown', (e) => {
     return activate((active + (e.shiftKey ? tabs.length - 1 : 1)) % tabs.length);
   }
   if (ctrl && /^[1-9]$/.test(e.key) && tabs[Number(e.key) - 1]) { e.preventDefault(); return activate(Number(e.key) - 1); }
+  if (ctrl && e.key === 'f' && cur()) { e.preventDefault(); $('#search').focus(); return $('#search').select(); }
   const t = cur();
   if (!t || inField) return;
   if (e.key === 'F5') return refresh(t);
@@ -1079,6 +1200,19 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+$('#search').addEventListener('input', (e) => {
+  const t = cur();
+  if (!t) return;
+  t.search.q = e.target.value;
+  runSearch(t);
+});
+$('#search').addEventListener('keydown', (e) => {
+  const t = cur();
+  if (!t) return;
+  if (e.key === 'Enter') { e.preventDefault(); stepSearch(t, e.shiftKey ? -1 : 1); }
+  else if (e.key === 'Escape') { e.target.value = ''; t.search = { q: '', hits: [], pos: -1 }; updateSearchCount(t); renderRows(); e.target.blur(); }
+});
+$('#tb-refresh').addEventListener('click', () => cur() && refresh(cur()));
 $('#newtab').addEventListener('click', chooseAndOpen);
 $('#open-btn').addEventListener('click', chooseAndOpen);
 api.onOpenPath(openPath);

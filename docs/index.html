@@ -87,7 +87,8 @@
   <section id="features">
     <h2>What you get</h2>
     <div class="grid">
-      <div class="card"><h3>Commit graph</h3><p>Lanes, badges for branches, tags and remotes, a dashed "Local Changes" node, and lazy loading for long histories.</p></div>
+      <div class="card"><h3>Commit graph</h3><p>Lanes, lane-coloured badges for branches, tags and remotes, a dashed "Local Changes" node, and lazy loading for long histories.</p></div>
+      <div class="card"><h3>Search</h3><p>Find commits by message, author, hash or ref name, then step through the matches.</p></div>
       <div class="card"><h3>Tabs for many repos</h3><p>Drag to reorder. Your tabs are restored on restart.</p></div>
       <div class="card"><h3>Rebase onto here</h3><p>Right-click any commit. Uncommitted changes are autostashed, and conflicts get Continue / Skip / Abort.</p></div>
       <div class="card"><h3>Squash</h3><p>Select consecutive commits and squash them, or fold one into its parent with a reworded message.</p></div>
@@ -117,7 +118,7 @@ scripts/install-desktop.sh   # npm install + app-grid entry + `forklin` command<
     <ol class="steps">
       <li>Launch Forklin from your app grid, or run <code>forklin /path/to/repo</code>.</li>
       <li>Open a repository with <kbd>Ctrl</kbd>+<kbd>T</kbd>, the <b>+</b> button, or <b>Open repository…</b>. Each repo gets its own tab.</li>
-      <li>Click a commit to see its changed files and diff. Click <b>Local Changes</b> at the top of the graph to stage, unstage and commit.</li>
+      <li>Click a commit to see its changed files and diff, or nothing to see a repository overview. Click <b>Local Changes</b> at the top of the graph to stage, unstage and commit.</li>
       <li>Right-click commits, branches, tags, remotes and stashes for the rest of the actions.</li>
     </ol>
   </section>
@@ -149,7 +150,7 @@ scripts/install-desktop.sh   # npm install + app-grid entry + `forklin` command<
     <p>Right-click a branch, tag or stash in the sidebar, or any commit, to check out, create a branch or tag, merge, cherry-pick, revert, reset (soft, mixed or hard) and more. Deleting a tag can remove it from remotes too. Destructive actions ask before they run.</p>
 
     <h3>Remotes</h3>
-    <p>The sidebar's <b>Remotes</b> section lists each remote with its URL and branches. Use <b>+</b> to add one; right-click a remote to edit its name or URL, or remove it. Fetch, pull and push live in the toolbar, including force push (with lease).</p>
+    <p>The sidebar's <b>Remotes</b> section lists each remote with its URL and branches. Use <b>+</b> to add one; right-click a remote to edit its name or URL, or remove it. Fetch, pull and push live in the toolbar, with ahead/behind counts on Pull and Push. Force push (with lease) is in the menu next to Push.</p>
 
     <h3>Prune gone branches</h3>
     <p>After a fetch, local branches whose upstream was deleted on the remote show <b>gone</b>. The ✂ button on the sidebar's <b>Branches</b> header lists them and deletes them all. The checked-out branch is never deleted.</p>
@@ -164,6 +165,7 @@ scripts/install-desktop.sh   # npm install + app-grid entry + `forklin` command<
       <tr><td><kbd>Ctrl</kbd>+<kbd>Tab</kbd></td><td>Next tab</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd></td><td>Jump to tab</td></tr>
       <tr><td><kbd>Ctrl</kbd>/<kbd>Shift</kbd>-click</td><td>Select several commits</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>Search commits (<kbd>Enter</kbd> / <kbd>Shift</kbd>+<kbd>Enter</kbd> for next / previous match)</td></tr>
       <tr><td><kbd>F5</kbd></td><td>Refresh</td></tr>
       <tr><td><kbd>↑</kbd> / <kbd>↓</kbd></td><td>Move through commits</td></tr>
       <tr><td><kbd>Esc</kbd></td><td>Clear the commit selection</td></tr>

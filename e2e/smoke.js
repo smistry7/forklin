@@ -66,19 +66,50 @@ async function main() {
     await waitFor('document.querySelectorAll("#rows .row").length >= 3', 'graph rows');
     assert.equal(await ev('document.querySelectorAll("#tabs > *").length'), 1, 'one tab for the opened repo');
     const text = await ev('document.querySelector("#rows").textContent');
-    for (const s of ['commit first', 'commit second', 'Local Changes', 'main', 'v1', 'feature']) assert.ok(text.includes(s), `graph shows "${s}"`);
+    for (const s of ['commit first', 'commit second', 'Local Changes', 'main', 'feature']) assert.ok(text.includes(s), `graph shows "${s}"`);
+    // The third ref on a commit collapses into a "+N" chip whose tooltip names it.
+    const html = await ev('document.querySelector("#rows").innerHTML');
+    assert.match(html, /class="badge more" title="[^"]*v1/, 'overflow chip lists the hidden tag');
     const side = await ev('document.querySelector("#sidebar").textContent');
     for (const s of ['BRANCHES', 'feature', 'v1']) assert.ok(side.toUpperCase().includes(s.toUpperCase()), `sidebar shows "${s}"`);
     const bar = await ev('document.querySelector("#toolbar").textContent');
     for (const s of ['Fetch', 'Pull', 'Push', 'Stash']) assert.ok(bar.includes(s), `toolbar has ${s}`);
+
+    // Nothing selected: the details pane shows the repository overview, including the dirty working tree.
+    assert.ok((await ev('document.querySelector("#details").textContent')).includes('1 uncommitted change'), 'overview shows uncommitted changes');
+    assert.equal(await ev('document.querySelectorAll("#tabs .dirty").length'), 1, 'dirty dot on the tab');
 
     const click = (txt, ctrl) => ev(`(() => { const r = [...document.querySelectorAll('#rows .row')].find((r) => r.textContent.includes(${JSON.stringify(txt)})); if (!r) return false; r.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: ${!!ctrl} })); return true; })()`);
     assert.ok(await click('Local Changes'), 'Local Changes row exists');
     await waitFor('document.querySelector("#details").textContent.includes("a.txt")', 'unstaged file listed');
     assert.ok((await ev('document.querySelector("#details").textContent')).includes('Commit'), 'commit box visible');
 
+    // Staging the dirty file enables a labelled commit button once there is a message.
+    assert.ok(await ev('document.querySelector(".commitbox") !== null'), 'commit box present');
+    assert.equal(await ev('document.querySelector(".commitbox .primary").textContent'), 'Commit', 'commit button label with nothing staged');
+    assert.equal(await ev('document.querySelector(".commitbox .primary").disabled'), true, 'commit disabled with nothing staged');
+
+    // Stage everything through the UI: the staged list and the commit button label follow.
+    await ev(`[...document.querySelectorAll('#details button')].find((b) => b.textContent === 'Stage all').click()`);
+    await waitFor('document.querySelector("#details").textContent.includes("Staged (1)")', 'file staged');
+    await ev(`(() => { const m = document.querySelector('#msg'); m.value = 'e2e'; m.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await waitFor('document.querySelector(".commitbox .primary").textContent === "Commit 1 file" && !document.querySelector(".commitbox .primary").disabled', 'commit button enabled and labelled');
+
+    assert.ok(await click('commit first'));
+    await waitFor('document.querySelectorAll("#details .dl").length > 0', 'diff rows');
+    const diffText = await ev('document.querySelector("#details .diff").textContent');
+    assert.ok(!diffText.includes('diff --git') && !diffText.includes('index '), 'raw diff header hidden');
+    assert.ok(await ev('document.querySelectorAll("#details .dl.add").length') >= 1, 'added line rendered');
+    assert.ok(await ev('document.querySelector("#details .diffbar") !== null'), 'diff has a file header');
     assert.ok(await click('commit first'));
     await waitFor('document.querySelector("#details").textContent.includes("1 changed file") || document.querySelector("#details").textContent.toUpperCase().includes("1 CHANGED FILE")', 'commit details');
+
+    // Search: Enter-able matches are highlighted and counted.
+    await ev(`(() => { const i = document.querySelector('#search'); i.value = 'second'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await waitFor('document.querySelector("#search-count").textContent === "1/1"', 'search count');
+    assert.ok(await ev('document.querySelectorAll("#rows .row.match").length') === 1, 'match highlighted');
+    await ev(`(() => { const i = document.querySelector('#search'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await waitFor('document.querySelector("#search-count").textContent === ""', 'search cleared');
 
     assert.ok(await click('commit first'));
     assert.ok(await click('commit second', true));
