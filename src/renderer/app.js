@@ -5,7 +5,7 @@ const ROW_H = 26;
 const LANE_W = 14;
 const MAX_LANES = 14;
 const PAGE = 1500;
-const LOCAL = 'LOCAL'; // pseudo-commit for uncommitted changes
+const { LOCAL, isConflict, isUnstaged, isStaged, shortSha, stagePaths, localNameForRemote, reconcileRefs, groupRemoteBranches, diffLineClass } = Logic;
 const LANE_COLORS = ['#4c8dff', '#e5534b', '#57ab5a', '#daaa3f', '#b083f0', '#39c5cf', '#f47067', '#e275ad'];
 const dateFmt = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
@@ -214,17 +214,7 @@ async function loadMore(tab) {
 }
 
 function rebuild(tab) {
-  const { local, remote } = tab.summary.branches;
-  const localNames = new Set(local.map((b) => b.name));
-  const remoteNames = new Set(remote.map((b) => b.name));
-  for (const c of tab.commits) {
-    c.refs = c.refs.map((r) => {
-      if (r.type === 'tag' || r.type === 'head' || r.head) return r;
-      if (localNames.has(r.name)) return { ...r, type: 'branch' };
-      if (remoteNames.has(r.name)) return { ...r, type: 'remote' };
-      return r;
-    });
-  }
+  reconcileRefs(tab.commits, tab.summary.branches);
   const input = tab.commits.map((c) => ({ hash: c.hash, parents: c.parents }));
   const hasLocal = tab.summary.status.length > 0;
   const entries = tab.commits.slice();
@@ -317,40 +307,11 @@ async function op(tab, label, fn) {
 
 // ---------------------------------------------------------------- helpers
 
-const isConflict = (f) => f.index === 'U' || f.worktree === 'U' || (f.index === 'A' && f.worktree === 'A') || (f.index === 'D' && f.worktree === 'D');
-const isUnstaged = (f) => f.worktree !== ' ' || f.index === '?';
-const isStaged = (f) => f.index !== ' ' && f.index !== '?' && !isConflict(f);
-const shortSha = (sha) => sha.slice(0, 7);
-
 function currentBranchLabel(tab) {
   return tab.summary && tab.summary.branches.current ? tab.summary.branches.current : 'HEAD (detached)';
 }
 
-// Selected commits must be a consecutive, merge-free run on the current branch's first-parent chain.
-// With intoParent, the oldest selected commit's parent joins the run, so one commit is enough.
-function squashable(tab, { intoParent = false } = {}) {
-  const hashes = [...tab.selected];
-  if (hashes.includes(LOCAL)) return { ok: false, reason: 'Local changes cannot be squashed' };
-  if (!intoParent && hashes.length < 2) return { ok: false, reason: 'Select at least two commits' };
-  const byHash = new Map(tab.commits.map((c) => [c.hash, c]));
-  const chain = [];
-  for (let cur = tab.summary.head; cur && byHash.has(cur); cur = byHash.get(cur).parents[0]) chain.push(byHash.get(cur));
-  const pos = hashes.map((x) => chain.findIndex((c) => c.hash === x)).sort((a, b) => a - b);
-  if (pos[0] === -1) return { ok: false, reason: 'All selected commits must be on the current branch' };
-  const lo = pos[0];
-  const hi = pos[pos.length - 1];
-  if (hi - lo + 1 !== pos.length) return { ok: false, reason: 'Selected commits must be consecutive' };
-  const run = chain.slice(lo, hi + 1);
-  if (run.some((c) => c.parents.length > 1)) return { ok: false, reason: 'Cannot squash across a merge commit' };
-  if (intoParent) {
-    const parent = chain[hi + 1];
-    if (!parent) return { ok: false, reason: byHash.get(run[run.length - 1].hash).parents.length ? 'Parent commit is not loaded' : 'Root commit has no parent' };
-    if (parent.parents.length > 1) return { ok: false, reason: 'Cannot squash into a merge commit' };
-    run.push(parent);
-  }
-  const oldestFirst = run.slice().reverse();
-  return { ok: true, hashes: oldestFirst.map((c) => c.hash), subjects: oldestFirst.map((c) => c.subject) };
-}
+const squashable = (tab, opts) => Logic.squashable({ selected: tab.selected, commits: tab.commits, head: tab.summary.head }, opts);
 
 // ---------------------------------------------------------------- rendering
 
@@ -506,16 +467,10 @@ function renderSidebar() {
 
 // Always rendered (even with no remotes) so there is somewhere to add one. Branches are grouped under their remote.
 function remotesSection(t, jump) {
-  const { remotes } = t.summary;
-  const groups = new Map(remotes.map((r) => [r.name, { remote: r, branches: [] }]));
-  for (const b of t.summary.branches.remote) {
-    const owner = [...groups.keys()].filter((n) => b.name.startsWith(`${n}/`)).sort((a, c) => c.length - a.length)[0];
-    if (owner) groups.get(owner).branches.push(b);
-  }
   return h('div', { class: 'sec' },
     h('h4', {}, 'Remotes',
       h('button', { class: 'add', title: 'Add remote…', on: { click: () => addRemote(t) } }, '+')),
-    [...groups.values()].map(({ remote, branches }) => [
+    groupRemoteBranches(t.summary.remotes, t.summary.branches.remote).map(({ remote, branches }) => [
       h('div', {
         class: 'item remote',
         title: remote.url,
@@ -553,7 +508,7 @@ async function pruneGone(t, gone) {
 }
 
 function checkoutRemote(t, name) {
-  const short = name.split('/').slice(1).join('/');
+  const short = localNameForRemote(name);
   const exists = t.summary.branches.local.some((b) => b.name === short);
   return op(t, 'Checking out…', () => (exists ? api.git('checkout', t.path, short) : api.git('checkoutRemote', t.path, name)));
 }
@@ -712,12 +667,7 @@ function renderDiff(text) {
   const MAX = 5000;
   const frag = document.createDocumentFragment();
   for (const l of lines.slice(0, MAX)) {
-    let cls = '';
-    if (l.startsWith('@@')) cls = 'hunk';
-    else if (/^(\+\+\+|---|diff |index |new file|deleted file|similarity|rename |Binary|old mode|new mode)/.test(l)) cls = 'dmeta';
-    else if (l.startsWith('+')) cls = 'add';
-    else if (l.startsWith('-')) cls = 'del';
-    frag.append(h('div', { class: cls }, l || ' '));
+    frag.append(h('div', { class: diffLineClass(l) }, l || ' '));
   }
   if (lines.length > MAX) frag.append(h('div', { class: 'dmeta' }, `… diff truncated (${lines.length - MAX} more lines)`));
   box.append(frag);
@@ -793,7 +743,7 @@ function renderLocalChanges(t, el) {
 
   const fileRow = (f, isStagedList) => {
     const letter = isStagedList ? f.index : isConflict(f) ? 'U' : f.index === '?' ? '?' : f.worktree;
-    const paths = isStagedList && f.from ? [f.from, f.path] : [f.path];
+    const paths = isStagedList ? stagePaths(f) : [f.path];
     const act = (label, title, fn, cls) => h('button', { title, class: cls || '', on: { click: (e) => { e.stopPropagation(); fn(); } } }, label);
     return h('div', {
       class: 'file' + (selKey === `${f.path}:${isStagedList}` ? ' sel' : ''),
@@ -827,7 +777,7 @@ function renderLocalChanges(t, el) {
       unstaged.map((f) => fileRow(f, false))),
     h('div', { class: 'files', style: 'max-height:24%' },
       h('h5', {}, `Staged (${staged.length})`,
-        h('button', { disabled: !staged.length || !!t.busy, on: { click: () => op(t, 'Unstaging…', () => api.git('unstage', t.path, staged.flatMap((f) => (f.from ? [f.from, f.path] : [f.path])))) } }, 'Unstage all')),
+        h('button', { disabled: !staged.length || !!t.busy, on: { click: () => op(t, 'Unstaging…', () => api.git('unstage', t.path, staged.flatMap(stagePaths))) } }, 'Unstage all')),
       staged.map((f) => fileRow(f, true))),
     t.diff ? renderDiff(t.diff.text) : emptyDiff(t),
     h('div', { class: 'commitbox' }, msg,
