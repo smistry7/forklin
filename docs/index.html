@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forklin: a local-only Git client</title>
+<meta name="description" content="Forklin is a local-only Git client for Linux with a commit graph, repo tabs and one-click rebase. No accounts, no telemetry.">
+<link rel="icon" href="images/icon.png">
+<style>
+  :root {
+    --bg: #1e1f22; --panel: #26282c; --line: #35373c; --text: #e3e5e8; --muted: #9aa0a8;
+    --accent: #5b9dff; --green: #6fdc8c;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f6f7f9; --panel: #ffffff; --line: #dcdfe4; --text: #1d2026; --muted: #5d6470; --accent: #1f6feb; --green: #1a7f37; }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif; }
+  a { color: var(--accent); }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 20px; }
+  nav { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+  nav .wrap { display: flex; align-items: center; gap: 18px; height: 54px; overflow-x: auto; white-space: nowrap; }
+  nav strong { display: flex; align-items: center; gap: 8px; margin-right: auto; }
+  nav img { width: 24px; height: 24px; }
+  nav a { color: var(--muted); text-decoration: none; font-size: 14px; }
+  nav a:hover { color: var(--text); }
+  header.hero { text-align: center; padding: 64px 0 36px; }
+  .hero img.logo { width: 96px; height: 96px; }
+  h1 { font-size: clamp(2rem, 6vw, 3rem); margin: 12px 0 8px; letter-spacing: -0.02em; }
+  .tag { color: var(--muted); font-size: 1.15rem; max-width: 620px; margin: 0 auto 26px; }
+  .btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; border: 1px solid var(--line); color: var(--text); background: var(--panel); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .shot { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); box-shadow: 0 18px 50px rgba(0,0,0,.35); }
+  figure { margin: 24px 0; }
+  figcaption { color: var(--muted); font-size: 14px; text-align: center; margin-top: 10px; }
+  section { padding: 40px 0 8px; }
+  h2 { font-size: 1.7rem; margin: 0 0 12px; letter-spacing: -0.01em; }
+  h3 { margin: 28px 0 6px; font-size: 1.1rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-top: 18px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  .card h3 { margin: 0 0 4px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  pre, code { font-family: ui-monospace, "SF Mono", "Ubuntu Mono", Menlo, monospace; }
+  pre { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-size: 14px; }
+  code { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; font-size: .9em; }
+  pre code { background: none; border: 0; padding: 0; }
+  kbd { font: 12px ui-monospace, monospace; background: var(--panel); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 1px 6px; }
+  table { border-collapse: collapse; width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  td { padding: 9px 14px; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: 0; }
+  td:first-child { white-space: nowrap; width: 1%; }
+  ol.steps { padding-left: 1.2em; } ol.steps li { margin: 8px 0; }
+  .note { border-left: 3px solid var(--accent); background: var(--panel); padding: 10px 16px; border-radius: 0 8px 8px 0; color: var(--muted); font-size: 15px; }
+  footer { margin-top: 56px; padding: 28px 0 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; text-align: center; }
+</style>
+</head>
+<body>
+<nav><div class="wrap">
+  <strong><img src="images/icon.png" alt="">Forklin</strong>
+  <a href="#install">Install</a><a href="#start">Getting started</a><a href="#guide">Guide</a><a href="#shortcuts">Shortcuts</a>
+  <a href="https://github.com/smistry7/forklin">GitHub</a>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <img class="logo" src="images/icon.png" alt="Forklin logo">
+  <h1>Forklin</h1>
+  <p class="tag">A local-only Git client for Linux. A commit graph, tabs for multiple repos and one-click rebase. It shells out to your system <code>git</code>: no accounts, no telemetry, no network calls of its own.</p>
+  <div class="btns">
+    <a class="btn primary" href="https://github.com/smistry7/forklin/releases/latest">Download AppImage</a>
+    <a class="btn" href="https://github.com/smistry7/forklin">View on GitHub</a>
+  </div>
+</div></header>
+
+<main class="wrap">
+  <figure>
+    <img class="shot" src="images/graph.png" alt="Forklin showing a commit graph with coloured lanes, branch and tag badges, and a sidebar of branches, remotes, tags and stashes">
+    <figcaption>The commit graph with branch, tag and remote badges, plus a sidebar for branches, remotes, tags and stashes.</figcaption>
+  </figure>
+
+  <section id="features">
+    <h2>What you get</h2>
+    <div class="grid">
+      <div class="card"><h3>Commit graph</h3><p>Lanes, badges for branches, tags and remotes, a dashed "Local Changes" node, and lazy loading for long histories.</p></div>
+      <div class="card"><h3>Tabs for many repos</h3><p>Drag to reorder. Your tabs are restored on restart.</p></div>
+      <div class="card"><h3>Rebase onto here</h3><p>Right-click any commit. Uncommitted changes are autostashed, and conflicts get Continue / Skip / Abort.</p></div>
+      <div class="card"><h3>Squash</h3><p>Select consecutive commits and squash them, or fold one into its parent with a reworded message.</p></div>
+      <div class="card"><h3>Remotes &amp; pruning</h3><p>Add, edit and remove remotes. Clean up local branches whose upstream is "gone" in one click.</p></div>
+      <div class="card"><h3>Live refresh</h3><p>Commit in a terminal and the graph updates by itself.</p></div>
+    </div>
+  </section>
+
+  <section id="install">
+    <h2>Install</h2>
+    <p>You need <code>git</code> 2.25 or newer.</p>
+    <h3>AppImage (easiest, no Node.js needed)</h3>
+    <p>Download <code>forklin-&lt;version&gt;-x86_64.AppImage</code> from the <a href="https://github.com/smistry7/forklin/releases/latest">Releases page</a>, then:</p>
+<pre><code>chmod +x forklin-*.AppImage
+./forklin-*.AppImage /path/to/repo</code></pre>
+    <p class="note">On Ubuntu 22.04+ the AppImage may also need FUSE 2: <code>sudo apt install libfuse2</code> (<code>libfuse2t64</code> on 24.04).</p>
+    <h3>From source</h3>
+    <p>Needs a current <a href="https://nodejs.org">Node.js</a> with npm (apt's version is often too old; <a href="https://github.com/nvm-sh/nvm">nvm</a> works well).</p>
+<pre><code>git clone https://github.com/smistry7/forklin.git
+cd forklin
+scripts/install-desktop.sh   # npm install + app-grid entry + `forklin` command</code></pre>
+    <p>The installer links the checkout into <code>~/.local/bin/forklin</code> and adds an app-grid entry, so keep the folder where it is, and make sure <code>~/.local/bin</code> is on your <code>PATH</code>. To run without installing a launcher use <code>npm install &amp;&amp; npm start</code>.</p>
+  </section>
+
+  <section id="start">
+    <h2>Getting started</h2>
+    <ol class="steps">
+      <li>Launch Forklin from your app grid, or run <code>forklin /path/to/repo</code>.</li>
+      <li>Open a repository with <kbd>Ctrl</kbd>+<kbd>T</kbd>, the <b>+</b> button, or <b>Open repository…</b>. Each repo gets its own tab.</li>
+      <li>Click a commit to see its changed files and diff. Click <b>Local Changes</b> at the top of the graph to stage, unstage and commit.</li>
+      <li>Right-click commits, branches, tags, remotes and stashes for the rest of the actions.</li>
+    </ol>
+  </section>
+
+  <section id="guide">
+    <h2>Using Forklin</h2>
+
+    <h3>Reading history</h3>
+    <p>Each coloured lane is a line of history. Badges mark branches (green is your checked-out branch), tags and remote branches. Click a commit to see its message, author, parent and per-file diffs in the right-hand panel.</p>
+    <figure>
+      <img class="shot" src="images/commit.png" alt="Commit details panel showing the message, author, SHA, parent and a diff of the changed file">
+      <figcaption>Selecting a commit shows its details and diff.</figcaption>
+    </figure>
+
+    <h3>Staging and committing</h3>
+    <p>Select <b>Local Changes</b> to see unstaged and staged files. Use <b>Stage all</b> / <b>Unstage all</b> or click individual files, check the diff, type a message and press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to commit. Tick <b>Amend last commit</b> to fold the change into the previous commit. Discarding changes asks for confirmation.</p>
+    <figure>
+      <img class="shot" src="images/changes.png" alt="Local changes panel with unstaged and staged files, a diff and a commit message box">
+      <figcaption>Stage files, review the diff and commit from the Local Changes panel.</figcaption>
+    </figure>
+
+    <h3>Rebase onto here</h3>
+    <p>Right-click any commit and choose <b>Rebase &lt;current branch&gt; onto here</b>. Uncommitted changes are autostashed. If there are conflicts, a banner offers <b>Continue</b>, <b>Skip</b> and <b>Abort</b>.</p>
+
+    <h3>Squash commits</h3>
+    <p>Ctrl/Shift-click to select several commits, right-click, then <b>Squash N commits…</b>. They must be consecutive, merge-free commits on the current branch. <b>Squash into parent…</b> works on one commit, or a consecutive selection, and folds it into the commit below with a message prompt to reword the result.</p>
+
+    <h3>Branches, tags and stashes</h3>
+    <p>Right-click a branch, tag or stash in the sidebar, or any commit, to check out, create a branch or tag, merge, cherry-pick, revert, reset (soft, mixed or hard) and more. Deleting a tag can remove it from remotes too. Destructive actions ask before they run.</p>
+
+    <h3>Remotes</h3>
+    <p>The sidebar's <b>Remotes</b> section lists each remote with its URL and branches. Use <b>+</b> to add one; right-click a remote to edit its name or URL, or remove it. Fetch, pull and push live in the toolbar, including force push (with lease).</p>
+
+    <h3>Prune gone branches</h3>
+    <p>After a fetch, local branches whose upstream was deleted on the remote show <b>gone</b>. The ✂ button on the sidebar's <b>Branches</b> header lists them and deletes them all. The checked-out branch is never deleted.</p>
+  </section>
+
+  <section id="shortcuts">
+    <h2>Keyboard shortcuts</h2>
+    <p>Cmd works in place of Ctrl on macOS.</p>
+    <table>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd> / <kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Open a repository</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>W</kbd></td><td>Close the current tab</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Tab</kbd></td><td>Next tab</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd></td><td>Jump to tab</td></tr>
+      <tr><td><kbd>Ctrl</kbd>/<kbd>Shift</kbd>-click</td><td>Select several commits</td></tr>
+      <tr><td><kbd>F5</kbd></td><td>Refresh</td></tr>
+      <tr><td><kbd>↑</kbd> / <kbd>↓</kbd></td><td>Move through commits</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Clear the commit selection</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>Commit (in the message box)</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>Privacy</h2>
+    <p>Forklin runs entirely on your machine. It has no accounts, no telemetry and makes no network calls of its own. Only the <code>git</code> commands you trigger (fetch, pull, push) touch the network, and they go through your own git configuration and credentials.</p>
+  </section>
+</main>
+
+<footer><div class="wrap">
+  Forklin is <a href="https://github.com/smistry7/forklin/blob/main/LICENSE">MIT licensed</a> ·
+  <a href="https://github.com/smistry7/forklin">Source</a> ·
+  <a href="https://github.com/smistry7/forklin/issues">Report an issue</a>
+</div></footer>
+</body>
+</html>

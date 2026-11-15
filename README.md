@@ -2,6 +2,10 @@
 
 A local-only Git client for Ubuntu, in the spirit of Fork. It shells out to your system `git`, keeps no accounts and sends no telemetry.
 
+**[Documentation and user guide](https://smistry7.github.io/forklin/)**
+
+![Forklin commit graph with branches, tags and a sidebar of remotes and stashes](docs/images/graph.png)
+
 ## Features
 
 - **Commit graph** with lanes, branch/tag/remote badges, a dashed "Local Changes" node, lazy loading of long histories.
@@ -12,6 +16,12 @@ A local-only Git client for Ubuntu, in the spirit of Fork. It shells out to your
 - **Prune gone branches**: after a fetch, local branches whose upstream was deleted on the remote show "gone". The ✂ button on the sidebar's Branches header lists them and deletes them all (never the checked-out branch).
 - Also: checkout, create branch/tag, delete tag (locally and on remotes), merge, cherry-pick, revert, reset (soft/mixed/hard), stash, stage/unstage/discard, commit/amend, fetch/pull/push (including force push with lease), diffs.
 - Changes made outside the app (terminal commits, etc.) refresh automatically.
+
+## Screenshots
+
+![Commit details with a per-file diff](docs/images/commit.png)
+
+![Local changes: staged and unstaged files, diff and commit box](docs/images/changes.png)
 
 ## Install
 
