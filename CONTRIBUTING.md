@@ -20,3 +20,9 @@ Forklin is a local-only Git client: Electron, plain JavaScript, no bundler or fr
 - Match the existing style: 2-space indent, single quotes, semicolons, CommonJS.
 
 `CLAUDE.md` has the longer architecture notes.
+
+## Releasing
+
+1. Update `version` in `package.json` and `package-lock.json` (`npm version X.Y.Z --no-git-tag-version`).
+2. Optionally write release notes in `.github/release-notes/vX.Y.Z.md`; without that file the release uses auto-generated notes.
+3. Commit, tag `vX.Y.Z` and push the tag. `.github/workflows/release.yml` runs the tests, builds the AppImage and publishes the release.
